@@ -1,0 +1,12 @@
+[project]
+name = "life-sandbox"
+version = "0.1.0"
+description = "Multi-agent career-path sandbox on AG2 Beta — coordinator + parallel evaluators + decision agent"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "ag2[gemini,openai] @ git+https://github.com/ag2ai/ag2.git@main",
+    "fastapi>=0.115.0",
+    "python-dotenv>=1.0.0",
+    "uvicorn>=0.34.0",
+]
