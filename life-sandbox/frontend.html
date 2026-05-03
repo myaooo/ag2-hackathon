@@ -299,6 +299,47 @@
         font-size: 13px;
         margin-top: 16px;
       }
+
+      /* ============== Career advice ============== */
+      .advice-btn {
+        margin-top: 8px;
+        background: transparent;
+        color: var(--accent);
+        border: 1px solid var(--border-strong);
+        font-family: inherit; font-size: 12px; font-weight: 600;
+        padding: 8px 14px; border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .advice-btn:hover:not(:disabled) {
+        background: rgba(99, 102, 241, 0.08);
+        border-color: var(--accent);
+      }
+      .advice-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+      .advice-block {
+        margin-top: 14px;
+        padding: 14px;
+        background: var(--bg-2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        font-size: 13px;
+      }
+      .advice-block h4 {
+        font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+        text-transform: uppercase; color: var(--text-muted);
+        margin: 12px 0 6px;
+      }
+      .advice-block h4:first-of-type { margin-top: 0; }
+      .advice-block .headline {
+        font-size: 14px; font-weight: 600; color: var(--text-primary);
+        margin-bottom: 8px;
+      }
+      .advice-block ul {
+        list-style: disc inside;
+        color: var(--text-secondary);
+        padding-left: 4px;
+      }
+      .advice-block ul li { margin-bottom: 3px; }
     </style>
   </head>
   <body>
@@ -444,6 +485,7 @@
 
       const $ = (sel, root = document) => root.querySelector(sel);
       const charts = [];
+      let lastProfile = null;  // captured from the form, reused by the /career-advice POST
 
       function fmtMoney(n) {
         if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M';
@@ -486,13 +528,17 @@
         return 'bad';
       }
 
+      // Memo so the advice button click can find the chosen path by id.
+      let lastTop3 = [];
+
       function renderCards(top3) {
         // Destroy any existing charts to avoid leaks on re-runs
         for (const c of charts) c.destroy();
         charts.length = 0;
+        lastTop3 = top3;
 
         const html = top3.map((p, idx) => `
-          <article class="card ${idx === 0 ? 'rank-1' : ''}" data-path="${p.path_id}">
+          <article class="card ${idx === 0 ? 'rank-1' : ''}" data-path="${escapeHtml(p.path_id)}">
             <div class="card-header">
               <div>
                 <div class="card-title">${escapeHtml(p.title)}</div>
@@ -515,9 +561,27 @@
               <div class="label">Trade-offs</div>
               <div class="text">${escapeHtml(p.tradeoffs)}</div>
             </div>
+            <button class="advice-btn" data-path="${escapeHtml(p.path_id)}">
+              I'd pick this — get my career advice →
+            </button>
+            <div class="advice-mount" data-mount="${escapeHtml(p.path_id)}"></div>
           </article>
         `).join('');
         return `<div class="cards">${html}</div>`;
+      }
+
+      function renderAdvice(advice) {
+        return `
+          <div class="advice-block">
+            <div class="headline">${escapeHtml(advice.headline)}</div>
+            <h4>Courses, books, certifications</h4>
+            <ul>${advice.courses.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>
+            <h4>Programs to apply to</h4>
+            <ul>${advice.programs.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>
+            <h4>Personal projects</h4>
+            <ul>${advice.personal_projects.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>
+          </div>
+        `;
       }
 
       function drawChart(canvasId, mean, stddev) {
@@ -664,6 +728,7 @@
           notes:          $('#notes').value.trim(),
           extracts:       stashedExtracts,
         };
+        lastProfile = profile;
 
         const btn = $('#submit-btn');
         btn.disabled = true;
@@ -755,6 +820,37 @@
         div.textContent = 'Error: ' + msg;
         $('#results').appendChild(div);
       }
+
+      // ---- Career advice: click "I'd pick this — get my career advice" on a card ----
+      document.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.advice-btn');
+        if (!btn) return;
+
+        const pathId = btn.dataset.path;
+        const chosen = lastTop3.find(p => p.path_id === pathId);
+        const mount = document.querySelector(`[data-mount="${CSS.escape(pathId)}"]`);
+        if (!chosen || !mount || !lastProfile) return;
+
+        btn.disabled = true;
+        btn.textContent = 'Building advice…';
+        mount.innerHTML = '';
+
+        try {
+          const res = await fetch('/career-advice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ profile: lastProfile, chosen }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+          const advice = await res.json();
+          mount.innerHTML = renderAdvice(advice);
+          btn.style.display = 'none';
+        } catch (err) {
+          mount.innerHTML = `<div class="error-banner">Advice failed: ${escapeHtml(err.message || String(err))}</div>`;
+          btn.disabled = false;
+          btn.textContent = "I'd pick this — get my career advice →";
+        }
+      });
     </script>
   </body>
 </html>

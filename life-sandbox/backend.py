@@ -49,7 +49,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
+from pydantic import BaseModel
+
 from agents import (
+    build_career_advice_agent,
     build_career_evaluator,
     build_config,
     build_coordinator,
@@ -60,6 +63,7 @@ from agents import (
 )
 import ingest
 from schemas import (
+    CareerAdvice,
     CareerOutput,
     DecisionOutput,
     FinanceOutput,
@@ -68,6 +72,7 @@ from schemas import (
     IngestSummary,
     PathCandidates,
     ProfileExtract,
+    RankedPath,
     RiskOutput,
     UserProfile,
 )
@@ -87,6 +92,7 @@ finance_eval = build_finance_evaluator()
 risk_eval = build_risk_evaluator()
 decision_agent = build_decision_agent()
 ingest_agent = build_ingest_agent()
+career_advice_agent = build_career_advice_agent()
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +251,28 @@ async def simulate(profile: UserProfile) -> DecisionOutput:
     """Run the full pipeline synchronously. Returns the top-3 ranked paths."""
     try:
         return await run_pipeline(profile)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+class CareerAdviceRequest(BaseModel):
+    profile: UserProfile
+    chosen: RankedPath
+
+
+@app.post("/career-advice", response_model=CareerAdvice)
+async def career_advice(req: CareerAdviceRequest) -> CareerAdvice:
+    """Concrete courses + programs + personal projects for the user's chosen path."""
+    prompt = (
+        f"{_profile_block(req.profile)}\n"
+        f"Chosen path:\n{req.chosen.model_dump_json(indent=2)}\n\n"
+        "Return courses, programs, personal_projects, and a headline tailored to this "
+        "user's stage / field / location and the demands of this specific path. "
+        "Use the chosen path's path_id verbatim."
+    )
+    try:
+        reply = await career_advice_agent.ask(prompt)
+        return await reply.content(retries=2)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

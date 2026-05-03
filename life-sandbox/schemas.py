@@ -3,6 +3,10 @@
 Each domain agent (Career / Finance / Risk) accepts the full list of 3 candidate
 paths and returns a list of evals — one per path — so the whole pipeline is
 4 LLM calls (coordinator + 3 evaluators in parallel + decision).
+
+A separate Career Advice agent (POST /career-advice) takes a chosen RankedPath
+and returns concrete suggestions — courses, programs, projects — for the user
+to improve their profile toward that path.
 """
 
 from __future__ import annotations
@@ -135,3 +139,41 @@ class IngestSummary(BaseModel):
 class IngestResponse(BaseModel):
     summary: IngestSummary
     extracts: list[ProfileExtract]
+
+
+# ---------------------------------------------------------------------------
+# Career advice agent — runs after the user picks a single path
+# ---------------------------------------------------------------------------
+
+
+class CareerAdvice(BaseModel):
+    path_id: str
+    headline: Annotated[str, Field(description="One sentence: what should the user focus on first?")]
+    courses: Annotated[
+        list[str],
+        Field(
+            min_length=3,
+            max_length=6,
+            description="Named courses, MOOCs, books, or certifications. E.g. 'CS229 Stanford', "
+            "'Designing Data-Intensive Applications by Kleppmann', 'CFA Level I'. "
+            "NOT generic 'take an online course'.",
+        ),
+    ]
+    programs: Annotated[
+        list[str],
+        Field(
+            min_length=3,
+            max_length=6,
+            description="Internships, fellowships, summer programs by name. E.g. 'YC Summer 2026', "
+            "'Anthropic residency', 'Citadel summer analyst', 'NSF REU at Berkeley'.",
+        ),
+    ]
+    personal_projects: Annotated[
+        list[str],
+        Field(
+            min_length=3,
+            max_length=6,
+            description="Specific, buildable portfolio projects — each 1-2 sentences, concrete "
+            "enough that the user could start tomorrow.",
+        ),
+    ]
