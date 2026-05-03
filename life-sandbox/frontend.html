@@ -206,6 +206,72 @@
       animation: bubble-in 0.4s ease forwards;
     }
     @keyframes bubble-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ── Screen 1: Landing ── */
+    .s1-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px; border-radius: 999px;
+      background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.25);
+      font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+      color: #818cf8; margin-bottom: 24px;
+      animation: s1-fade 0.8s ease 0.2s both;
+    }
+    .s1-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--indigo); animation: bdot 2s ease infinite; }
+    @keyframes bdot    { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+    @keyframes s1-fade { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+    .s1-title {
+      font-size: clamp(38px, 7vw, 68px); font-weight: 900;
+      letter-spacing: -0.04em; line-height: 1.05; text-align: center;
+      margin-bottom: 14px;
+      background: linear-gradient(135deg, #fff 40%, rgba(129,140,248,0.85));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      animation: s1-fade 0.8s ease 0.4s both;
+    }
+    .s1-sub {
+      font-size: 15px; color: rgba(255,255,255,0.4); text-align: center;
+      max-width: 420px; line-height: 1.65; margin-bottom: 36px;
+      animation: s1-fade 0.8s ease 0.6s both;
+    }
+
+    .li-wrap { width: 100%; max-width: 460px; animation: s1-fade 0.8s ease 0.8s both; }
+    .li-box {
+      display: flex; align-items: center;
+      background: rgba(255,255,255,0.04); border: 1.5px solid rgba(255,255,255,0.1);
+      border-radius: 14px; padding: 4px 4px 4px 16px; gap: 8px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .li-box:focus-within {
+      border-color: rgba(99,102,241,0.5);
+      box-shadow: 0 0 0 4px rgba(99,102,241,0.1);
+    }
+    .li-input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text); font-family: inherit; font-size: 14px; padding: 9px 0;
+    }
+    .li-input::placeholder { color: rgba(255,255,255,0.22); }
+    .li-go {
+      padding: 10px 18px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--indigo), var(--purple));
+      color: white; font-family: inherit; font-size: 13px; font-weight: 700;
+      border: none; cursor: pointer; flex-shrink: 0;
+      box-shadow: 0 4px 20px rgba(99,102,241,0.4);
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .li-go:hover  { opacity: 0.9; }
+    .li-go:active { transform: scale(0.97); }
+    .li-divider {
+      display: flex; align-items: center; gap: 12px;
+      color: rgba(255,255,255,0.18); font-size: 12px; margin: 12px 0;
+    }
+    .li-divider::before, .li-divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.06); }
+    .li-skip {
+      width: 100%; padding: 11px; border-radius: 12px;
+      background: transparent; border: 1px solid rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.32); font-family: inherit; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: border-color 0.15s, color 0.15s;
+    }
+    .li-skip:hover { border-color: rgba(255,255,255,0.18); color: rgba(255,255,255,0.6); }
   </style>
 </head>
 <body>
@@ -248,7 +314,21 @@
     <div class="comp-bubble" id="comp-bubble">Ready to find your path?</div>
   </div>
 
-  <!-- Screens inserted in Tasks 2-8 -->
+  <!-- ══ Screen 1: Landing ══ -->
+  <div class="screen active" id="s1">
+    <div class="s1-badge"><div class="s1-badge-dot"></div>AG2 Multi-Agent · 5 specialists</div>
+    <div class="s1-title">Your life,<br/>your rules.</div>
+    <div class="s1-sub">Five AI agents simulate the next 5 years of your life across every path you could take.</div>
+    <div class="li-wrap">
+      <div class="li-box">
+        <span style="font-size:18px">🔗</span>
+        <input class="li-input" id="li-url" type="text" placeholder="Paste your LinkedIn URL to get started…"/>
+        <button class="li-go" id="li-import-btn">Import →</button>
+      </div>
+      <div class="li-divider">or start fresh</div>
+      <button class="li-skip" id="li-skip-btn">Fill in manually →</button>
+    </div>
+  </div>
 
 </div>
 <script>
@@ -374,6 +454,24 @@
     scene.appendChild(sp);
     setTimeout(() => sp.remove(), 700);
   }
+
+  // Profile state
+  const profile = {
+    stage: 'undergrad',
+    field: '',
+    location: '',
+    risk_tolerance: 0.40,
+    ambition: 0.70,
+    notes: '',
+  };
+
+  document.getElementById('li-import-btn').addEventListener('click', () => {
+    const url = document.getElementById('li-url').value.trim();
+    if (!url) { document.getElementById('li-url').focus(); return; }
+    profile.linkedinUrl = url;
+    advance(3);
+  });
+  document.getElementById('li-skip-btn').addEventListener('click', () => advance(2));
 </script>
 </body>
 </html>
