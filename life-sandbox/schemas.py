@@ -1,12 +1,16 @@
 """Pydantic schemas for the life-sandbox multi-agent pipeline.
 
-Each domain agent (Career / Finance / Risk) accepts the full list of 3 candidate
-paths and returns a list of evals — one per path — so the whole pipeline is
-4 LLM calls (coordinator + 3 evaluators in parallel + decision).
+Two-phase flow:
+  1. Coordinator proposes 5 candidate paths (POST /candidates).
+  2. User picks 1-3 of them (with optional custom path expanded via the
+     path-expander agent at POST /expand-custom).
+  3. Domain evaluators (Career / Finance / Risk / Lifestyle) run on the
+     user-selected paths and the decision agent ranks them
+     (POST /analyze/stream).
 
-A separate Career Advice agent (POST /career-advice) takes a chosen RankedPath
-and returns concrete suggestions — courses, programs, projects — for the user
-to improve their profile toward that path.
+A separate Career Advice agent (POST /career-advice) takes a chosen
+RankedPath and returns concrete suggestions — courses, programs, projects —
+for the user to improve their profile toward that path.
 """
 
 from __future__ import annotations
@@ -44,7 +48,7 @@ class PathCandidate(BaseModel):
 
 
 class PathCandidates(BaseModel):
-    paths: Annotated[list[PathCandidate], Field(min_length=3, max_length=3, description="Exactly 3 distinct candidate paths")]
+    paths: Annotated[list[PathCandidate], Field(min_length=5, max_length=5, description="Exactly 5 distinct candidate paths")]
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +64,7 @@ class CareerEval(BaseModel):
 
 
 class CareerOutput(BaseModel):
-    evals: Annotated[list[CareerEval], Field(min_length=3, max_length=3)]
+    evals: Annotated[list[CareerEval], Field(min_length=1, max_length=5)]
 
 
 class FinanceEval(BaseModel):
@@ -72,7 +76,7 @@ class FinanceEval(BaseModel):
 
 
 class FinanceOutput(BaseModel):
-    evals: Annotated[list[FinanceEval], Field(min_length=3, max_length=3)]
+    evals: Annotated[list[FinanceEval], Field(min_length=1, max_length=5)]
 
 
 class RiskEval(BaseModel):
@@ -83,7 +87,7 @@ class RiskEval(BaseModel):
 
 
 class RiskOutput(BaseModel):
-    evals: Annotated[list[RiskEval], Field(min_length=3, max_length=3)]
+    evals: Annotated[list[RiskEval], Field(min_length=1, max_length=5)]
 
 
 class LifestyleEval(BaseModel):
@@ -95,7 +99,7 @@ class LifestyleEval(BaseModel):
 
 
 class LifestyleOutput(BaseModel):
-    evals: Annotated[list[LifestyleEval], Field(min_length=3, max_length=3)]
+    evals: Annotated[list[LifestyleEval], Field(min_length=1, max_length=5)]
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +129,49 @@ class RankedPath(BaseModel):
 
 
 class DecisionOutput(BaseModel):
-    top3: Annotated[list[RankedPath], Field(min_length=3, max_length=3, description="Paths sorted by utility, best first")]
+    top3: Annotated[list[RankedPath], Field(min_length=1, max_length=5, description="User-selected paths sorted by utility, best first (1-3 from the new flow, up to 5 from legacy /simulate/stream)")]
+
+
+# ---------------------------------------------------------------------------
+# Critic agent — challenges the decision agent's ranking (multi-agent debate)
+# ---------------------------------------------------------------------------
+
+
+class PathCritique(BaseModel):
+    path_id: str
+    challenge: Annotated[str, Field(description="2-3 sentences arguing why this path's rank/utility might be wrong, OR 'No major issues' if the rank is sound.")]
+    optimism_flags: Annotated[
+        list[str],
+        Field(
+            min_length=1,
+            max_length=4,
+            description="Specific evaluator assumptions that look optimistic — e.g. "
+            "'salary curve assumes top-quartile placement', 'ruin_prob ignores 2024 layoff trend'. "
+            "1-4 items.",
+        ),
+    ]
+
+
+class CritiqueOutput(BaseModel):
+    overall_challenge: Annotated[str, Field(description="2-3 sentences framing the strongest dissent on the ranking as a whole — or 'Ranking is sound' if no real issue.")]
+    most_overrated_path_id: Annotated[str | None, Field(default=None, description="Path id the critic thinks is ranked too high. None if no issue.")]
+    most_underrated_path_id: Annotated[str | None, Field(default=None, description="Path id the critic thinks is ranked too low. None if no issue.")]
+    per_path: Annotated[list[PathCritique], Field(min_length=1, max_length=5, description="One critique per ranked path, in the same order the decision agent ranked them.")]
+
+
+# ---------------------------------------------------------------------------
+# Two-phase pipeline request schemas
+# ---------------------------------------------------------------------------
+
+
+class CustomPathRequest(BaseModel):
+    profile: UserProfile
+    description: Annotated[str, Field(min_length=2, max_length=500, description="Free-form description of the path the user has in mind")]
+
+
+class AnalyzeRequest(BaseModel):
+    profile: UserProfile
+    selected_paths: Annotated[list[PathCandidate], Field(min_length=1, max_length=3, description="The 1-3 paths the user selected (mix of coordinator-proposed + optional custom)")]
 
 
 # ---------------------------------------------------------------------------

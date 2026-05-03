@@ -424,6 +424,138 @@
     }
     .btn-restart:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
 
+    /* ── Screen 8: Path selection (NEW — Shape B flow) ── */
+    .pick-wrap {
+      width: 100%; max-width: 720px;
+      max-height: calc(100vh - 170px); overflow-y: auto;
+    }
+    .pick-title { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px; }
+    .pick-sub   { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+    .pick-counter {
+      display: inline-block; margin-left: 8px; padding: 2px 8px;
+      border-radius: 999px; background: rgba(99,102,241,0.12);
+      color: #818cf8; font-size: 11px; font-weight: 700;
+    }
+    .pick-loading {
+      grid-column: 1 / -1;
+      padding: 32px; text-align: center; color: var(--muted);
+      font-size: 13px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+    }
+    .pick-loading::before {
+      content: ''; width: 22px; height: 22px;
+      border: 2px solid rgba(99,102,241,0.2);
+      border-top-color: var(--indigo);
+      border-radius: 50%;
+      animation: pick-spin 0.8s linear infinite;
+    }
+    @keyframes pick-spin { to { transform: rotate(360deg); } }
+
+    .pick-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px; margin-bottom: 14px;
+    }
+    @media (max-width: 600px) { .pick-grid { grid-template-columns: 1fr; } }
+
+    .pick-tile {
+      position: relative;
+      padding: 14px 16px 14px 14px; border-radius: 12px;
+      background: rgba(255,255,255,0.03);
+      border: 1.5px solid rgba(255,255,255,0.08);
+      cursor: pointer; transition: all 0.15s;
+      animation: pick-fade 0.4s ease var(--tile-delay, 0s) both;
+    }
+    @keyframes pick-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .pick-tile:hover {
+      background: rgba(99,102,241,0.06);
+      border-color: rgba(99,102,241,0.3);
+    }
+    .pick-tile.picked {
+      background: rgba(99,102,241,0.12);
+      border-color: var(--indigo);
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+    }
+    .pick-tile.disabled {
+      opacity: 0.4; cursor: not-allowed;
+    }
+    .pick-tile-title {
+      font-size: 14px; font-weight: 700; color: var(--text);
+      padding-right: 28px; line-height: 1.3; margin-bottom: 4px;
+    }
+    .pick-tile-arch {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.05em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+    }
+    .pick-tile-summary {
+      font-size: 12px; color: var(--muted); line-height: 1.5;
+    }
+    .pick-tile-check {
+      position: absolute; top: 12px; right: 12px;
+      width: 20px; height: 20px; border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.18);
+      background: transparent;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .pick-tile.picked .pick-tile-check {
+      background: var(--indigo); border-color: var(--indigo);
+      box-shadow: 0 0 12px rgba(99,102,241,0.4);
+    }
+    .pick-tile-check::after {
+      content: '✓'; color: white; font-size: 11px; font-weight: 800;
+      opacity: 0; transition: opacity 0.15s;
+    }
+    .pick-tile.picked .pick-tile-check::after { opacity: 1; }
+
+    .pick-custom {
+      grid-column: 1 / -1;
+      padding: 14px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1.5px dashed rgba(255,255,255,0.12);
+    }
+    .pick-custom.picked {
+      background: rgba(99,102,241,0.08);
+      border-style: solid; border-color: var(--indigo);
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+    }
+    .pick-custom-label {
+      font-size: 12px; font-weight: 700; color: var(--muted);
+      letter-spacing: 0.04em; text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .pick-custom-input {
+      width: 100%;
+      padding: 10px 12px; border-radius: 8px;
+      background: rgba(0,0,0,0.25);
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.08);
+      font-family: inherit; font-size: 13px; outline: none;
+      resize: vertical; min-height: 60px; line-height: 1.5;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .pick-custom-input:focus { border-color: var(--indigo); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+    .pick-custom-input::placeholder { color: rgba(255,255,255,0.25); }
+
+    .pick-confirm-row {
+      display: flex; gap: 10px; margin-top: 14px;
+    }
+    .btn-confirm {
+      flex: 1; padding: 13px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--indigo), var(--purple));
+      color: white; font-family: inherit; font-size: 14px; font-weight: 700;
+      border: none; cursor: pointer;
+      box-shadow: 0 4px 18px rgba(99,102,241,0.3);
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn-confirm:hover:not(:disabled) { opacity: 0.92; }
+    .btn-confirm:active:not(:disabled) { transform: scale(0.98); }
+    .btn-confirm:disabled {
+      background: rgba(255,255,255,0.05);
+      color: rgba(255,255,255,0.3);
+      cursor: not-allowed; box-shadow: none;
+    }
+
     /* ── Career advice (post-pick agent) ── */
     .advice-btn {
       margin-top: 14px; width: 100%; padding: 12px; border-radius: 10px;
@@ -514,7 +646,7 @@
       text-transform: uppercase; color: var(--muted);
       margin-bottom: 8px;
     }
-    #orch-svg { width: 100%; height: 410px; display: block; }
+    #orch-svg { width: 100%; height: 530px; display: block; }
     .orch-label-sub {
       font-size: 8px; font-weight: 600; letter-spacing: 0.04em;
       fill: rgba(255,255,255,0.3); pointer-events: none;
@@ -539,6 +671,15 @@
     .orch-edge.user-gated {
       stroke-dasharray: 3 4;
       stroke: rgba(255,255,255,0.12);
+    }
+    /* Feedback loop edge (Critic → Decision): visually distinct as "feedback". */
+    .orch-edge.feedback {
+      stroke: rgba(251,191,36,0.18);
+      stroke-dasharray: 2 4;
+    }
+    .orch-edge.feedback.active {
+      stroke: var(--amber);
+      stroke-dasharray: 4 4;
     }
     @keyframes orch-flow {
       from { stroke-dashoffset: 10; }
@@ -604,53 +745,69 @@
   </button>
   <div id="orch-panel" class="hidden" role="region" aria-label="Multi-agent orchestration">
     <div class="orch-panel-title">Multi-agent orchestration</div>
-    <svg id="orch-svg" viewBox="0 0 280 410" xmlns="http://www.w3.org/2000/svg">
+    <svg id="orch-svg" viewBox="0 0 280 530" xmlns="http://www.w3.org/2000/svg">
       <!-- Edges (drawn first, behind nodes). 4 evaluators in parallel: x = 35, 105, 175, 245 -->
-      <path class="orch-edge" id="e-coord-career"     d="M 140,50  Q  95,90   35,118" />
-      <path class="orch-edge" id="e-coord-finance"    d="M 140,50  Q 125,85  105,118" />
-      <path class="orch-edge" id="e-coord-risk"       d="M 140,50  Q 155,85  175,118" />
-      <path class="orch-edge" id="e-coord-lifestyle"  d="M 140,50  Q 185,90  245,118" />
-      <path class="orch-edge" id="e-career-decision"     d="M  35,158 Q  80,203 140,228" />
-      <path class="orch-edge" id="e-finance-decision"    d="M 105,158 Q 120,203 140,228" />
-      <path class="orch-edge" id="e-risk-decision"       d="M 175,158 Q 160,203 140,228" />
-      <path class="orch-edge" id="e-lifestyle-decision"  d="M 245,158 Q 200,203 140,228" />
-      <path class="orch-edge user-gated" id="e-decision-advice" d="M 140,268 L 140,338" />
+      <path class="orch-edge" id="e-coord-pick"        d="M 140,50  L 140,96" />
+      <path class="orch-edge" id="e-pick-career"       d="M 140,124 Q  90,145  35,162" />
+      <path class="orch-edge" id="e-pick-finance"      d="M 140,124 Q 125,144 105,162" />
+      <path class="orch-edge" id="e-pick-risk"         d="M 140,124 Q 155,144 175,162" />
+      <path class="orch-edge" id="e-pick-lifestyle"    d="M 140,124 Q 190,145 245,162" />
+      <path class="orch-edge" id="e-career-decision"     d="M  35,198 Q  80,240 140,270" />
+      <path class="orch-edge" id="e-finance-decision"    d="M 105,198 Q 120,240 140,270" />
+      <path class="orch-edge" id="e-risk-decision"       d="M 175,198 Q 160,240 140,270" />
+      <path class="orch-edge" id="e-lifestyle-decision"  d="M 245,198 Q 200,240 140,270" />
+      <path class="orch-edge" id="e-decision-critic"     d="M 140,310 L 140,358" />
+      <!-- Critic → Decision feedback loop (right-side curve, drawn behind the down-edge). -->
+      <path class="orch-edge feedback" id="e-critic-decision" d="M 160,378 Q 240,335 152,290" />
+      <path class="orch-edge user-gated" id="e-critic-advice" d="M 140,398 L 140,450" />
       <!-- Nodes -->
       <g class="orch-node" id="orch-coordinator">
         <circle cx="140" cy="30" r="20" />
         <text class="orch-icon"  x="140" y="35" text-anchor="middle">🧭</text>
         <text class="orch-label" x="140" y="68" text-anchor="middle">Coordinator</text>
       </g>
+      <g class="orch-node" id="orch-pick">
+        <circle cx="140" cy="110" r="14" />
+        <text class="orch-icon"      x="140" y="114" text-anchor="middle" style="font-size:13px">👤</text>
+        <text class="orch-label"     x="140" y="142" text-anchor="middle">User Pick</text>
+        <text class="orch-label-sub" x="140" y="152" text-anchor="middle">human in the loop</text>
+      </g>
       <g class="orch-node" id="orch-career">
-        <circle cx="35" cy="138" r="18" />
-        <text class="orch-icon"  x="35" y="143" text-anchor="middle">📈</text>
-        <text class="orch-label" x="35" y="174" text-anchor="middle">Career</text>
+        <circle cx="35" cy="180" r="18" />
+        <text class="orch-icon"  x="35" y="185" text-anchor="middle">📈</text>
+        <text class="orch-label" x="35" y="216" text-anchor="middle">Career</text>
       </g>
       <g class="orch-node" id="orch-finance">
-        <circle cx="105" cy="138" r="18" />
-        <text class="orch-icon"  x="105" y="143" text-anchor="middle">💰</text>
-        <text class="orch-label" x="105" y="174" text-anchor="middle">Finance</text>
+        <circle cx="105" cy="180" r="18" />
+        <text class="orch-icon"  x="105" y="185" text-anchor="middle">💰</text>
+        <text class="orch-label" x="105" y="216" text-anchor="middle">Finance</text>
       </g>
       <g class="orch-node" id="orch-risk">
-        <circle cx="175" cy="138" r="18" />
-        <text class="orch-icon"  x="175" y="143" text-anchor="middle">⚠️</text>
-        <text class="orch-label" x="175" y="174" text-anchor="middle">Risk</text>
+        <circle cx="175" cy="180" r="18" />
+        <text class="orch-icon"  x="175" y="185" text-anchor="middle">⚠️</text>
+        <text class="orch-label" x="175" y="216" text-anchor="middle">Risk</text>
       </g>
       <g class="orch-node" id="orch-lifestyle">
-        <circle cx="245" cy="138" r="18" />
-        <text class="orch-icon"  x="245" y="143" text-anchor="middle">🌿</text>
-        <text class="orch-label" x="245" y="174" text-anchor="middle">Lifestyle</text>
+        <circle cx="245" cy="180" r="18" />
+        <text class="orch-icon"  x="245" y="185" text-anchor="middle">🌿</text>
+        <text class="orch-label" x="245" y="216" text-anchor="middle">Lifestyle</text>
       </g>
       <g class="orch-node" id="orch-decision">
-        <circle cx="140" cy="248" r="20" />
-        <text class="orch-icon"  x="140" y="253" text-anchor="middle">🏆</text>
-        <text class="orch-label" x="140" y="286" text-anchor="middle">Decision</text>
+        <circle cx="140" cy="290" r="20" />
+        <text class="orch-icon"  x="140" y="295" text-anchor="middle">🏆</text>
+        <text class="orch-label" x="140" y="328" text-anchor="middle">Decision</text>
+      </g>
+      <g class="orch-node" id="orch-critic">
+        <circle cx="140" cy="378" r="20" />
+        <text class="orch-icon"      x="140" y="383" text-anchor="middle">🧐</text>
+        <text class="orch-label"     x="140" y="416" text-anchor="middle">Critic</text>
+        <text class="orch-label-sub" x="140" y="426" text-anchor="middle">adversarial review</text>
       </g>
       <g class="orch-node" id="orch-advice">
-        <circle cx="140" cy="358" r="20" />
-        <text class="orch-icon"      x="140" y="363" text-anchor="middle">🎯</text>
-        <text class="orch-label"     x="140" y="392" text-anchor="middle">Career Advice</text>
-        <text class="orch-label-sub" x="140" y="402" text-anchor="middle">on user pick</text>
+        <circle cx="140" cy="470" r="20" />
+        <text class="orch-icon"      x="140" y="475" text-anchor="middle">🎯</text>
+        <text class="orch-label"     x="140" y="508" text-anchor="middle">Career Advice</text>
+        <text class="orch-label-sub" x="140" y="518" text-anchor="middle">on user pick</text>
       </g>
     </svg>
     <div class="orch-legend">
@@ -694,11 +851,32 @@
     <div class="comp-bubble" id="comp-bubble">Ready to find your path?</div>
   </div>
 
-  <!-- ══ Screen 8: Simulation ══ -->
+  <!-- ══ Screen 8: Path selection (NEW — Shape B flow) ══ -->
   <div class="screen" id="s8">
+    <div class="pick-wrap">
+      <div class="pick-title">Pick the futures worth simulating</div>
+      <div class="pick-sub">
+        Coordinator proposed 5 paths. Pick up to 3 to evaluate in depth — or write your own.
+        <span class="pick-counter" id="pick-counter">0 / 3 selected</span>
+      </div>
+      <div class="pick-grid" id="pick-tiles">
+        <div class="pick-loading">Coordinator generating 5 candidate paths…</div>
+      </div>
+      <div class="pick-confirm-row">
+        <button class="btn-back" onclick="retreat(7)">← Back</button>
+        <button class="btn-confirm" id="pick-confirm" onclick="runAnalysis()" disabled>
+          Analyze 0 path
+        </button>
+      </div>
+      <div id="pick-error"></div>
+    </div>
+  </div>
+
+  <!-- ══ Screen 9: Simulation ══ -->
+  <div class="screen" id="s9">
     <div class="sim-wrap">
       <div class="sim-title">Simulating your futures…</div>
-      <div class="sim-sub">6 specialist agents · 4 running in parallel · ~20 seconds</div>
+      <div class="sim-sub">7 specialist agents · 4 running in parallel · ~20 seconds</div>
       <div class="agents">
         <div class="agent" id="ag-coordinator">
           <div class="agent-icon">🧭</div>
@@ -742,13 +920,20 @@
             <div class="agent-status" id="st-decision">Waiting…</div>
           </div>
         </div>
+        <div class="agent" id="ag-critic">
+          <div class="agent-icon">🧐</div>
+          <div style="flex:1">
+            <div class="agent-name">Critic</div>
+            <div class="agent-status" id="st-critic">Waiting…</div>
+          </div>
+        </div>
       </div>
       <div id="sim-error"></div>
     </div>
   </div>
 
-  <!-- ══ Screen 9: Results ══ -->
-  <div class="screen" id="s9">
+  <!-- ══ Screen 10: Results ══ -->
+  <div class="screen" id="s10">
     <div class="results-wrap">
       <div class="results-title" id="results-title">Your simulated futures</div>
       <div class="results-sub" id="results-sub">Ranked by utility score</div>
@@ -901,6 +1086,8 @@
     current = n;
     // Progress bar: 0% on landing, fills across steps 2–7, full on sim
     const pct = n <= 1 ? 0 : n >= 8 ? 100 : Math.round(((n - 1) / PROFILE_STEPS) * 100);
+    // Note: progress bar represents profile-completion (s2..s7); selection (s8),
+    // sim (s9), and results (s10) all stay at 100%.
     document.getElementById('progress-fill').style.width = pct + '%';
     document.getElementById('orbits').style.opacity = (n === 1) ? '1' : '0';
     updateWalker(n);
@@ -924,11 +1111,11 @@
 
   const WALKER_POSITIONS = {
     1: '8%',  2: '18%', 3: '30%', 4: '42%',
-    5: '55%', 6: '68%', 7: '80%', 8: '90%', 9: '94%',
+    5: '55%', 6: '68%', 7: '80%', 8: '85%', 9: '92%', 10: '96%',
   };
   const WALKER_EMOJI = {
     1:'🧑‍💻', 2:'🧑‍🎓', 3:'🤔', 4:'✈️',
-    5:'🎲',  6:'🔥',  7:'💬', 8:'🔮', 9:'🎉',
+    5:'🎲',  6:'🔥',  7:'💬', 8:'🤝', 9:'🔮', 10:'🎉',
   };
   const BUBBLE_MSG = {
     1: 'Ready to find your path?',
@@ -938,8 +1125,9 @@
     5: 'How do you handle uncertainty?',
     6: 'How hungry are you for growth?',
     7: "Anything else? I'm all ears.",
-    8: 'The agents are crunching your data…',
-    9: 'Here are your futures — choose wisely!',
+    8: 'Pick the futures worth simulating.',
+    9: 'The agents are crunching your data…',
+    10: 'Here are your futures — choose wisely!',
   };
   const MILESTONE_IDS = { 2:'m2', 3:'m3', 4:'m4', 5:'m5', 6:'m6', 7:'m7', 8:'m8' };
 
@@ -1053,10 +1241,186 @@
   initSlider('risk-slider', 'risk-display', 'risk_tolerance');
   initSlider('amb-slider',  'amb-display',  'ambition');
 
+  // ── Shape B flow: s7 → s8 (selection) → s9 (sim) → s10 (results) ──
+  let proposedPaths = [];           // 5 PathCandidates from /candidates
+  const pickedIds = new Set();      // ids of picked proposed paths
+  let customDescription = '';       // free-form text for the custom slot
+  const MAX_PICKS = 3;
+
   function startSimulation() {
     profile.notes = document.getElementById('input-notes').value.trim();
     advance(8);
-    runSSE();
+    fetchAndRenderCandidates();
+  }
+
+  async function fetchAndRenderCandidates() {
+    // Reset selection state on each (re-)entry to s8.
+    proposedPaths = [];
+    pickedIds.clear();
+    customDescription = '';
+    document.getElementById('pick-error').innerHTML = '';
+    refreshConfirmButton();
+
+    const tiles = document.getElementById('pick-tiles');
+    tiles.innerHTML = '<div class="pick-loading">Coordinator generating 5 candidate paths…</div>';
+
+    // Light up Coordinator + the new User-Pick beat in the topology dash.
+    resetOrch();
+    setOrchNode('coordinator', 'running');
+
+    try {
+      const res = await fetch('/candidates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stage:          profile.stage          || 'undergrad',
+          field:          profile.field          || '',
+          location:       profile.location       || '',
+          risk_tolerance: profile.risk_tolerance ?? 0.4,
+          ambition:       profile.ambition       ?? 0.7,
+          notes:          profile.notes          || '',
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      proposedPaths = data.paths || [];
+
+      // Coordinator done → data flows into User Pick (now waiting on user).
+      setOrchNode('coordinator', 'done');
+      setOrchEdge('e-coord-pick', 'active');
+      setOrchNode('pick', 'running');
+
+      renderTiles();
+    } catch (err) {
+      tiles.innerHTML = `<div class="error-banner">Failed to fetch candidates: ${escapeHtml(err.message || String(err))}</div>`;
+      setOrchNode('coordinator', 'error');
+    }
+  }
+
+  function renderTiles() {
+    const tiles = document.getElementById('pick-tiles');
+    if (!proposedPaths.length) {
+      tiles.innerHTML = '<div class="pick-loading">No candidates returned.</div>';
+      return;
+    }
+    const proposedHtml = proposedPaths.map((p, i) => {
+      const picked = pickedIds.has(p.id);
+      const limitReached = !picked && totalPicked() >= MAX_PICKS;
+      return `
+        <div class="pick-tile ${picked ? 'picked' : ''} ${limitReached ? 'disabled' : ''}"
+             data-pid="${escapeHtml(p.id)}" style="--tile-delay:${i * 0.06}s">
+          <div class="pick-tile-check"></div>
+          <div class="pick-tile-title">${escapeHtml(p.title)}</div>
+          <div class="pick-tile-arch">${escapeHtml(p.archetype)}</div>
+          <div class="pick-tile-summary">${escapeHtml(p.summary)}</div>
+        </div>
+      `;
+    }).join('');
+    const customPicked = customDescription.trim().length > 0;
+    const customLimited = !customPicked && totalPicked() >= MAX_PICKS;
+    const customHtml = `
+      <div class="pick-custom ${customPicked ? 'picked' : ''}">
+        <div class="pick-custom-label">✏️ Or write your own career path ${customLimited ? '(slot full — clear another to enable)' : ''}</div>
+        <textarea class="pick-custom-input" id="pick-custom-input" rows="2"
+          placeholder="e.g. Indie game studio founder targeting Steam launches"
+          ${customLimited ? 'disabled' : ''}>${escapeHtml(customDescription)}</textarea>
+      </div>
+    `;
+    tiles.innerHTML = proposedHtml + customHtml;
+
+    // Wire tile clicks
+    tiles.querySelectorAll('.pick-tile').forEach(el => {
+      el.addEventListener('click', () => togglePick(el.dataset.pid));
+    });
+    // Wire custom textarea — typing/clearing toggles it as a "pick"
+    const ta = document.getElementById('pick-custom-input');
+    if (ta) {
+      ta.addEventListener('input', () => {
+        customDescription = ta.value;
+        refreshConfirmButton();
+        // Update custom-tile picked-state styling without re-rendering everything.
+        const wrap = ta.closest('.pick-custom');
+        if (wrap) wrap.classList.toggle('picked', customDescription.trim().length > 0);
+      });
+    }
+    refreshConfirmButton();
+  }
+
+  function totalPicked() {
+    return pickedIds.size + (customDescription.trim().length > 0 ? 1 : 0);
+  }
+
+  function togglePick(pathId) {
+    if (pickedIds.has(pathId)) {
+      pickedIds.delete(pathId);
+    } else {
+      if (totalPicked() >= MAX_PICKS) return;  // hit the cap
+      pickedIds.add(pathId);
+    }
+    renderTiles();
+  }
+
+  function refreshConfirmButton() {
+    const btn = document.getElementById('pick-confirm');
+    const counter = document.getElementById('pick-counter');
+    if (!btn || !counter) return;
+    const n = totalPicked();
+    counter.textContent = `${n} / ${MAX_PICKS} selected`;
+    btn.disabled = n === 0;
+    btn.textContent = n === 0
+      ? 'Pick at least one path'
+      : `Analyze ${n} path${n === 1 ? '' : 's'} →`;
+  }
+
+  async function runAnalysis() {
+    const n = totalPicked();
+    if (n === 0) return;
+
+    const btn = document.getElementById('pick-confirm');
+    btn.disabled = true;
+    btn.textContent = 'Preparing your selection…';
+    document.getElementById('pick-error').innerHTML = '';
+
+    // Build the selected_paths list. Custom path goes through /expand-custom first.
+    const selected = proposedPaths.filter(p => pickedIds.has(p.id));
+    if (customDescription.trim().length > 0) {
+      try {
+        btn.textContent = 'Expanding your custom path…';
+        const res = await fetch('/expand-custom', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            profile: {
+              stage:          profile.stage          || 'undergrad',
+              field:          profile.field          || '',
+              location:       profile.location       || '',
+              risk_tolerance: profile.risk_tolerance ?? 0.4,
+              ambition:       profile.ambition       ?? 0.7,
+              notes:          profile.notes          || '',
+            },
+            description: customDescription.trim(),
+          }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        const expanded = await res.json();
+        selected.push(expanded);
+      } catch (err) {
+        document.getElementById('pick-error').innerHTML =
+          `<div class="error-banner" style="margin-top:14px">Couldn't expand your custom path: ${escapeHtml(err.message || String(err))}</div>`;
+        btn.disabled = false;
+        refreshConfirmButton();
+        return;
+      }
+    }
+
+    // User Pick is done → fan-out edges go active for the parallel evaluators.
+    setOrchNode('pick', 'done');
+    setOrchEdge('e-coord-pick', 'done');
+    ORCH_PICK_FANOUT.forEach(id => setOrchEdge(id, 'active'));
+
+    // Hand off to the existing simulation screen + SSE loop.
+    advance(9);
+    runSSE(selected);
   }
 
   function setAgent(name, state, statusText) {
@@ -1087,18 +1451,22 @@
   }
 
   // ── Orchestration dash (Feature 1) ──
-  const ORCH_NODES = ['coordinator', 'career', 'finance', 'risk', 'lifestyle', 'decision', 'advice'];
-  // The decision→advice edge is "user-gated": idle until the user picks a path on s9.
+  const ORCH_NODES = ['coordinator', 'pick', 'career', 'finance', 'risk', 'lifestyle', 'decision', 'critic', 'advice'];
+  // The critic→advice edge is "user-gated": idle until the user picks a path on s10.
   const ORCH_AUTO_EDGES = [
-    'e-coord-career', 'e-coord-finance', 'e-coord-risk', 'e-coord-lifestyle',
+    'e-coord-pick',
+    'e-pick-career', 'e-pick-finance', 'e-pick-risk', 'e-pick-lifestyle',
     'e-career-decision', 'e-finance-decision', 'e-risk-decision', 'e-lifestyle-decision',
+    'e-decision-critic',
+    'e-critic-decision',  // feedback loop — critic's review back to decision agent
   ];
-  const ORCH_ALL_EDGES = [...ORCH_AUTO_EDGES, 'e-decision-advice'];
+  const ORCH_PICK_FANOUT = ['e-pick-career', 'e-pick-finance', 'e-pick-risk', 'e-pick-lifestyle'];
+  const ORCH_ALL_EDGES = [...ORCH_AUTO_EDGES, 'e-critic-advice'];
   const ORCH_EDGE_BY_EVAL = {
-    career:    { incoming: 'e-coord-career',    outgoing: 'e-career-decision'    },
-    finance:   { incoming: 'e-coord-finance',   outgoing: 'e-finance-decision'   },
-    risk:      { incoming: 'e-coord-risk',      outgoing: 'e-risk-decision'      },
-    lifestyle: { incoming: 'e-coord-lifestyle', outgoing: 'e-lifestyle-decision' },
+    career:    { incoming: 'e-pick-career',    outgoing: 'e-career-decision'    },
+    finance:   { incoming: 'e-pick-finance',   outgoing: 'e-finance-decision'   },
+    risk:      { incoming: 'e-pick-risk',      outgoing: 'e-risk-decision'      },
+    lifestyle: { incoming: 'e-pick-lifestyle', outgoing: 'e-lifestyle-decision' },
   };
 
   function setOrchNode(name, state) {
@@ -1120,17 +1488,29 @@
   function updateOrch(name, state) {
     setOrchNode(name, state);
     if (state === 'done' && name === 'coordinator') {
-      // Fan-out: data now flowing from coordinator to all 4 evaluators.
-      ['e-coord-career', 'e-coord-finance', 'e-coord-risk', 'e-coord-lifestyle']
-        .forEach(id => setOrchEdge(id, 'active'));
+      // Coordinator finished → User Pick is now the active beat. The edge
+      // through to the evaluators stays gated until the user confirms.
+      setOrchEdge('e-coord-pick', 'active');
     } else if (state === 'done' && ORCH_EDGE_BY_EVAL[name]) {
       // Eval done: its incoming edge is now done, its outgoing edge starts flowing.
       setOrchEdge(ORCH_EDGE_BY_EVAL[name].incoming, 'done');
       setOrchEdge(ORCH_EDGE_BY_EVAL[name].outgoing, 'active');
     } else if (state === 'done' && name === 'decision') {
-      // All upstream auto-edges complete. The decision→advice edge stays
-      // user-gated (idle) until the user picks a path on s9.
-      ORCH_AUTO_EDGES.forEach(id => setOrchEdge(id, 'done'));
+      // Decision finished. Could be the initial pass (about to hand off to
+      // critic) or the final revised pass. Mark eval→decision edges done in
+      // either case, and seal the feedback loopback if it's currently active
+      // (only true on the second / revised pass).
+      ['e-career-decision','e-finance-decision','e-risk-decision','e-lifestyle-decision']
+        .forEach(id => setOrchEdge(id, 'done'));
+      const fb = document.getElementById('e-critic-decision');
+      if (fb && fb.classList.contains('active')) setOrchEdge('e-critic-decision', 'done');
+    } else if (state === 'running' && name === 'critic') {
+      // Decision pass 1 done → fan into critic.
+      setOrchEdge('e-decision-critic', 'active');
+    } else if (state === 'done' && name === 'critic') {
+      // Critic done → its feedback flows BACK to decision (loopback edge).
+      setOrchEdge('e-decision-critic', 'done');
+      setOrchEdge('e-critic-decision', 'active');
     }
   }
 
@@ -1145,7 +1525,7 @@
   });
 
   function resetAgentUI() {
-    ['coordinator','career','finance','risk','lifestyle','decision'].forEach(name => {
+    ['coordinator','career','finance','risk','lifestyle','decision','critic'].forEach(name => {
       setAgent(name, '', 'Waiting…');
     });
     document.getElementById('sim-error').innerHTML = '';
@@ -1167,26 +1547,34 @@
   let decisionData = null;
   let activeReader = null;
 
-  async function runSSE() {
+  async function runSSE(selectedPaths) {
     if (activeReader) { try { activeReader.cancel(); } catch (_) {} activeReader = null; }
-    resetAgentUI();
-    setAgent('coordinator', 'running', 'Proposing career paths…');
+
+    // Reset just the agent statuses on s9 — the topology dash already reflects
+    // Coordinator-done + User-Pick-done from the selection step.
+    ['career','finance','risk','lifestyle','decision','critic'].forEach(name =>
+      setAgent(name, '', 'Waiting…'));
+    setAgent('coordinator', 'done', `Generated ${proposedPaths.length} candidate paths`);
+    document.getElementById('sim-error').innerHTML = '';
 
     const ctrl  = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 60_000);
     let res;
     try {
-      res = await fetch('/simulate/stream', {
+      res = await fetch('/analyze/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: ctrl.signal,
         body: JSON.stringify({
-          stage:          profile.stage          || 'undergrad',
-          field:          profile.field          || '',
-          location:       profile.location       || '',
-          risk_tolerance: profile.risk_tolerance ?? 0.4,
-          ambition:       profile.ambition       ?? 0.7,
-          notes:          profile.notes          || '',
+          profile: {
+            stage:          profile.stage          || 'undergrad',
+            field:          profile.field          || '',
+            location:       profile.location       || '',
+            risk_tolerance: profile.risk_tolerance ?? 0.4,
+            ambition:       profile.ambition       ?? 0.7,
+            notes:          profile.notes          || '',
+          },
+          selected_paths: selectedPaths,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
@@ -1235,6 +1623,17 @@
           if (data.stage === 'deciding') {
             setAgent('decision', 'running', 'Ranking by your utility…');
           }
+          if (data.stage === 'critiquing') {
+            // Decision pass 1 finished internally → critic now challenges it.
+            // We don't surface the initial ranking; only the revised one.
+            setAgent('decision', 'done', 'Initial ranking · awaiting critic');
+            setAgent('critic',   'running', 'Challenging the ranking…');
+          }
+          if (data.stage === 'revising') {
+            // Critic done → decision agent re-scores with critic's feedback.
+            setAgent('critic',   'done',    'Feedback delivered');
+            setAgent('decision', 'running', 'Re-ranking after critic feedback…');
+          }
         } else if (event === 'candidates') {
           setAgent('coordinator', 'done', `Generated ${(data.paths || []).length} candidate paths`);
         } else if (event === 'career') {
@@ -1246,10 +1645,13 @@
         } else if (event === 'lifestyle') {
           setAgent('lifestyle', 'done', 'WLB, pressure & burnout · done');
         } else if (event === 'decision') {
-          setAgent('decision', 'done', 'Ranked by your utility score');
+          // The ONLY decision event we receive is the revised ranking
+          // (post-critic feedback). The internal first-pass ranking and
+          // critique payload stay server-side.
+          setAgent('decision', 'done', 'Final ranking · post-critic');
           decisionData = data;
           renderResults(data);
-          setTimeout(() => advance(9), 700);
+          setTimeout(() => advance(10), 700);
         } else if (event === 'error') {
           showSimError(data.error);
           return;
@@ -1379,7 +1781,7 @@
     body.appendChild(mount);
 
     // Light up the user-gated edge + advice node in the topology dash.
-    setOrchEdge('e-decision-advice', 'active');
+    setOrchEdge('e-critic-advice', 'active');
     setOrchNode('advice', 'running');
 
     try {
@@ -1402,14 +1804,14 @@
       const advice = await res.json();
       mount.innerHTML = renderAdviceHtml(advice);
       if (targetBtn) targetBtn.style.display = 'none';
-      setOrchEdge('e-decision-advice', 'done');
+      setOrchEdge('e-critic-advice', 'done');
       setOrchNode('advice', 'done');
     } catch (err) {
       mount.innerHTML = `<div class="advice-headline" style="color:var(--red)">Plan failed: ${escapeHtml(err.message || String(err))}</div>`;
       cards.forEach(c => c.classList.remove('dimmed'));
       cards.forEach(c => c.querySelectorAll('.advice-btn').forEach(b => b.disabled = false));
       if (targetBtn) targetBtn.textContent = 'Choose this path → Get my 12-month plan';
-      setOrchEdge('e-decision-advice', '');
+      setOrchEdge('e-critic-advice', '');
       setOrchNode('advice', 'error');
     }
   }

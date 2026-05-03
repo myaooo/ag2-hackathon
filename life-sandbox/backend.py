@@ -56,22 +56,28 @@ from agents import (
     build_career_evaluator,
     build_config,
     build_coordinator,
+    build_critic,
     build_decision_agent,
     build_finance_evaluator,
     build_ingest_agent,
     build_lifestyle_evaluator,
+    build_path_expander,
     build_risk_evaluator,
 )
 import ingest
 from schemas import (
+    AnalyzeRequest,
     CareerAdvice,
     CareerOutput,
+    CritiqueOutput,
+    CustomPathRequest,
     DecisionOutput,
     FinanceOutput,
     IngestRequest,
     IngestResponse,
     IngestSummary,
     LifestyleOutput,
+    PathCandidate,
     PathCandidates,
     ProfileExtract,
     RankedPath,
@@ -94,6 +100,8 @@ finance_eval = build_finance_evaluator()
 risk_eval = build_risk_evaluator()
 lifestyle_eval = build_lifestyle_evaluator()
 decision_agent = build_decision_agent()
+critic_agent = build_critic()
+path_expander = build_path_expander()
 ingest_agent = build_ingest_agent()
 career_advice_agent = build_career_advice_agent()
 
@@ -128,54 +136,70 @@ def _profile_block(profile: UserProfile) -> str:
     return block
 
 
+def _paths_json(paths: list[PathCandidate]) -> str:
+    return json.dumps([p.model_dump() for p in paths], indent=2)
+
+
 async def _generate_candidates(profile: UserProfile) -> PathCandidates:
     prompt = (
         f"{_profile_block(profile)}\n"
-        "Propose exactly 3 distinct, realistic career path archetypes for this user. "
-        "Make sure the 3 paths span a meaningful range of trade-offs."
+        "Propose exactly 5 distinct, realistic career path archetypes for this user. "
+        "Span a meaningful range of trade-offs (stable corporate IC, founder, specialist, "
+        "creative/freelance, plus one wildcard). The user will pick 1-3 of these to "
+        "evaluate in depth."
     )
     reply = await coordinator.ask(prompt)
     return await reply.content(retries=2)
 
 
-async def _evaluate_career(profile: UserProfile, paths: PathCandidates) -> CareerOutput:
+async def _expand_custom_path(profile: UserProfile, description: str) -> PathCandidate:
     prompt = (
         f"{_profile_block(profile)}\n"
-        f"Candidate paths (evaluate ALL three, in order, by id):\n"
-        f"{paths.model_dump_json(indent=2)}\n\n"
+        f"User-described career path:\n  {description!r}\n\n"
+        "Return a single PathCandidate normalized for downstream evaluators."
+    )
+    reply = await path_expander.ask(prompt)
+    return await reply.content(retries=2)
+
+
+async def _evaluate_career(profile: UserProfile, paths: list[PathCandidate]) -> CareerOutput:
+    prompt = (
+        f"{_profile_block(profile)}\n"
+        f"Candidate paths (evaluate ALL provided, in order, by id):\n"
+        f"{_paths_json(paths)}\n\n"
         "Return one CareerEval per path. Use the provided `id` as path_id."
     )
     reply = await career_eval.ask(prompt)
     return await reply.content(retries=2)
 
 
-async def _evaluate_finance(profile: UserProfile, paths: PathCandidates) -> FinanceOutput:
+async def _evaluate_finance(profile: UserProfile, paths: list[PathCandidate]) -> FinanceOutput:
     prompt = (
         f"{_profile_block(profile)}\n"
-        f"Candidate paths (evaluate ALL three, in order, by id):\n"
-        f"{paths.model_dump_json(indent=2)}\n\n"
+        f"Candidate paths (evaluate ALL provided, in order, by id):\n"
+        f"{_paths_json(paths)}\n\n"
         "Return one FinanceEval per path. Use the provided `id` as path_id."
     )
     reply = await finance_eval.ask(prompt)
     return await reply.content(retries=2)
 
 
-async def _evaluate_risk(profile: UserProfile, paths: PathCandidates) -> RiskOutput:
+async def _evaluate_risk(profile: UserProfile, paths: list[PathCandidate]) -> RiskOutput:
     prompt = (
         f"{_profile_block(profile)}\n"
-        f"Candidate paths (evaluate ALL three, in order, by id):\n"
-        f"{paths.model_dump_json(indent=2)}\n\n"
+        f"Candidate paths (evaluate ALL provided, in order, by id):\n"
+        f"{_paths_json(paths)}\n\n"
         "Return one RiskEval per path. Use the provided `id` as path_id."
     )
     reply = await risk_eval.ask(prompt)
     return await reply.content(retries=2)
 
 
-async def _evaluate_lifestyle(profile: UserProfile, paths: PathCandidates) -> LifestyleOutput:
+async def _evaluate_lifestyle(profile: UserProfile, paths: list[PathCandidate]) -> LifestyleOutput:
     prompt = (
         f"{_profile_block(profile)}\n"
-        f"Candidate paths (evaluate ALL three, in order, by id):\n"
-        f"{paths.model_dump_json(indent=2)}\n\n"
+        f"Candidate paths (evaluate ALL provided, in order, by id):\n"
+        f"{_paths_json(paths)}\n\n"
         "Return one LifestyleEval per path. Use the provided `id` as path_id."
     )
     reply = await lifestyle_eval.ask(prompt)
@@ -184,7 +208,7 @@ async def _evaluate_lifestyle(profile: UserProfile, paths: PathCandidates) -> Li
 
 async def _decide(
     profile: UserProfile,
-    paths: PathCandidates,
+    paths: list[PathCandidate],
     career: CareerOutput,
     finance: FinanceOutput,
     risk: RiskOutput,
@@ -192,33 +216,98 @@ async def _decide(
 ) -> DecisionOutput:
     prompt = (
         f"{_profile_block(profile)}\n"
-        f"Candidate paths:\n{paths.model_dump_json(indent=2)}\n\n"
+        f"Selected paths ({len(paths)}):\n{_paths_json(paths)}\n\n"
         f"Career evaluations:\n{career.model_dump_json(indent=2)}\n\n"
         f"Finance evaluations:\n{finance.model_dump_json(indent=2)}\n\n"
         f"Risk evaluations:\n{risk.model_dump_json(indent=2)}\n\n"
         f"Lifestyle evaluations:\n{lifestyle.model_dump_json(indent=2)}\n\n"
         "Score each path with a utility function tailored to THIS user's "
-        "risk_tolerance and ambition, and return all 3 sorted by utility. "
-        "Surface salary curves, EV, ruin probability, growth rate, work hours, "
-        "pressure level, wlb_score, and burnout probability from the evaluations "
-        "into each RankedPath."
+        f"risk_tolerance and ambition. Return ALL {len(paths)} paths sorted by utility, "
+        "highest first. Surface salary curves, EV, ruin probability, growth rate, "
+        "work hours, pressure level, wlb_score, and burnout probability from the "
+        "evaluations into each RankedPath."
     )
     reply = await decision_agent.ask(prompt)
     return await reply.content(retries=2)
 
 
-async def run_pipeline(profile: UserProfile) -> DecisionOutput:
-    """Synchronous pipeline — runs the 4 evaluators in parallel."""
-    paths = await _generate_candidates(profile)
+async def _revise_decision(
+    profile: UserProfile,
+    paths: list[PathCandidate],
+    career: CareerOutput,
+    finance: FinanceOutput,
+    risk: RiskOutput,
+    lifestyle: LifestyleOutput,
+    initial: DecisionOutput,
+    critique: CritiqueOutput,
+) -> DecisionOutput:
+    """Decision agent's second pass — re-scores and re-ranks given the critic's feedback.
 
-    career, finance, risk, lifestyle = await asyncio.gather(
-        _evaluate_career(profile, paths),
-        _evaluate_finance(profile, paths),
-        _evaluate_risk(profile, paths),
-        _evaluate_lifestyle(profile, paths),
+    Same agent, same response_schema. The prompt explicitly includes the critic's
+    challenges so the LLM can adjust utility scores, why-it-fits, and tradeoffs.
+    """
+    prompt = (
+        f"{_profile_block(profile)}\n"
+        f"Selected paths ({len(paths)}):\n{_paths_json(paths)}\n\n"
+        f"Career evaluations:\n{career.model_dump_json(indent=2)}\n\n"
+        f"Finance evaluations:\n{finance.model_dump_json(indent=2)}\n\n"
+        f"Risk evaluations:\n{risk.model_dump_json(indent=2)}\n\n"
+        f"Lifestyle evaluations:\n{lifestyle.model_dump_json(indent=2)}\n\n"
+        f"YOUR PRIOR RANKING:\n{initial.model_dump_json(indent=2)}\n\n"
+        f"CRITIC'S REVIEW (challenges your ranking):\n{critique.model_dump_json(indent=2)}\n\n"
+        "Re-score and re-rank with the critic's feedback in mind. Where the critic "
+        "raises valid points (over-optimistic assumptions, underweighted risks, "
+        "mismatch with user preferences), adjust utility scores, why-it-fits, and "
+        "tradeoffs accordingly. Where the critic is wrong, defend your prior ranking "
+        "by keeping the score and tightening the why/tradeoffs to address the "
+        "challenge. Always return ALL "
+        f"{len(paths)} paths sorted by utility, highest first."
     )
+    reply = await decision_agent.ask(prompt)
+    return await reply.content(retries=2)
 
-    return await _decide(profile, paths, career, finance, risk, lifestyle)
+
+async def _analyze(profile: UserProfile, selected: list[PathCandidate]) -> DecisionOutput:
+    """Run the 4 evaluators in parallel on the user-selected paths, then decide."""
+    career, finance, risk, lifestyle = await asyncio.gather(
+        _evaluate_career(profile, selected),
+        _evaluate_finance(profile, selected),
+        _evaluate_risk(profile, selected),
+        _evaluate_lifestyle(profile, selected),
+    )
+    return await _decide(profile, selected, career, finance, risk, lifestyle)
+
+
+async def _critique(
+    profile: UserProfile,
+    paths: list[PathCandidate],
+    career: CareerOutput,
+    finance: FinanceOutput,
+    risk: RiskOutput,
+    lifestyle: LifestyleOutput,
+    decision: DecisionOutput,
+) -> CritiqueOutput:
+    """Adversarial pass — challenges the decision agent's ranking."""
+    prompt = (
+        f"{_profile_block(profile)}\n"
+        f"User-selected paths ({len(paths)}):\n{_paths_json(paths)}\n\n"
+        f"Career evaluations:\n{career.model_dump_json(indent=2)}\n\n"
+        f"Finance evaluations:\n{finance.model_dump_json(indent=2)}\n\n"
+        f"Risk evaluations:\n{risk.model_dump_json(indent=2)}\n\n"
+        f"Lifestyle evaluations:\n{lifestyle.model_dump_json(indent=2)}\n\n"
+        f"Decision agent's ranking:\n{decision.model_dump_json(indent=2)}\n\n"
+        "Challenge this ranking. Return one PathCritique per ranked path (in the same "
+        "order as the decision's top3), plus overall_challenge and the most "
+        "overrated/underrated path ids (or null if the ranking is sound)."
+    )
+    reply = await critic_agent.ask(prompt)
+    return await reply.content(retries=2)
+
+
+async def run_pipeline(profile: UserProfile) -> DecisionOutput:
+    """Legacy single-shot pipeline — coordinator proposes 5, evaluators evaluate all 5."""
+    paths = await _generate_candidates(profile)
+    return await _analyze(profile, list(paths.paths))
 
 
 # ---------------------------------------------------------------------------
@@ -266,9 +355,31 @@ async def healthz() -> dict:
 
 @app.post("/simulate", response_model=DecisionOutput)
 async def simulate(profile: UserProfile) -> DecisionOutput:
-    """Run the full pipeline synchronously. Returns the top-3 ranked paths."""
+    """Legacy single-shot pipeline. Coordinator proposes 5, all 5 evaluated + ranked."""
     try:
         return await run_pipeline(profile)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/candidates", response_model=PathCandidates)
+async def candidates(profile: UserProfile) -> PathCandidates:
+    """Phase 1 of the new flow: coordinator proposes 5 candidate paths."""
+    try:
+        return await _generate_candidates(profile)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/expand-custom", response_model=PathCandidate)
+async def expand_custom(req: CustomPathRequest) -> PathCandidate:
+    """Normalize a user's free-form career idea into a structured PathCandidate.
+
+    Used when the user types their own path on the selection screen instead
+    of (or in addition to) picking from the coordinator's 5 proposals.
+    """
+    try:
+        return await _expand_custom_path(req.profile, req.description)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -293,6 +404,103 @@ async def career_advice(req: CareerAdviceRequest) -> CareerAdvice:
         return await reply.content(retries=2)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/analyze/stream")
+async def analyze_stream(req: AnalyzeRequest) -> StreamingResponse:
+    """Phase 2 of the new flow: SSE stream that runs the 4 evaluators in
+    parallel on the user-selected paths, then the decision agent ranks them.
+
+    Multi-agent debate flow — decision agent runs twice, with the critic
+    in between. Only the REVISED ranking is sent to the client; the critique
+    payload is intentionally not emitted (it's an internal feedback signal).
+
+    Event sequence:
+        event: stage      data: {"stage": "evaluating"}
+        event: career     data: CareerOutput
+        event: finance    data: FinanceOutput
+        event: risk       data: RiskOutput
+        event: lifestyle  data: LifestyleOutput
+        event: stage      data: {"stage": "deciding"}    # decision pass 1 (internal)
+        event: stage      data: {"stage": "critiquing"}  # critic challenges (internal)
+        event: stage      data: {"stage": "revising"}    # decision pass 2
+        event: decision   data: DecisionOutput           # the FINAL revised ranking
+        event: done       data: {"ok": true}
+    """
+
+    async def event_stream() -> AsyncIterator[bytes]:
+        def sse(event: str, payload: dict) -> bytes:
+            return f"event: {event}\ndata: {json.dumps(payload)}\n\n".encode()
+
+        try:
+            yield sse("stage", {"stage": "evaluating"})
+
+            selected = list(req.selected_paths)
+            tasks = {
+                "career":    asyncio.create_task(_evaluate_career(req.profile, selected)),
+                "finance":   asyncio.create_task(_evaluate_finance(req.profile, selected)),
+                "risk":      asyncio.create_task(_evaluate_risk(req.profile, selected)),
+                "lifestyle": asyncio.create_task(_evaluate_lifestyle(req.profile, selected)),
+            }
+
+            results: dict[str, object] = {}
+            pending = set(tasks.values())
+            name_by_task = {task: name for name, task in tasks.items()}
+
+            while pending:
+                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                for task in done:
+                    name = name_by_task[task]
+                    result = task.result()
+                    results[name] = result
+                    yield sse(name, result.model_dump())
+
+            yield sse("stage", {"stage": "deciding"})
+            initial = await _decide(
+                req.profile,
+                selected,
+                results["career"],     # type: ignore[arg-type]
+                results["finance"],    # type: ignore[arg-type]
+                results["risk"],       # type: ignore[arg-type]
+                results["lifestyle"],  # type: ignore[arg-type]
+            )
+
+            yield sse("stage", {"stage": "critiquing"})
+            critique = await _critique(
+                req.profile,
+                selected,
+                results["career"],     # type: ignore[arg-type]
+                results["finance"],    # type: ignore[arg-type]
+                results["risk"],       # type: ignore[arg-type]
+                results["lifestyle"],  # type: ignore[arg-type]
+                initial,
+            )
+
+            yield sse("stage", {"stage": "revising"})
+            revised = await _revise_decision(
+                req.profile,
+                selected,
+                results["career"],     # type: ignore[arg-type]
+                results["finance"],    # type: ignore[arg-type]
+                results["risk"],       # type: ignore[arg-type]
+                results["lifestyle"],  # type: ignore[arg-type]
+                initial,
+                critique,
+            )
+            yield sse("decision", revised.model_dump())
+            yield sse("done", {"ok": True})
+        except Exception as exc:
+            yield sse("error", {"error": str(exc)})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @app.post("/simulate/stream")
@@ -324,11 +532,12 @@ async def simulate_stream(profile: UserProfile) -> StreamingResponse:
             yield sse("stage", {"stage": "evaluating"})
 
             # Run evaluators in parallel; emit each as it finishes.
+            selected = list(paths.paths)
             tasks = {
-                "career":    asyncio.create_task(_evaluate_career(profile, paths)),
-                "finance":   asyncio.create_task(_evaluate_finance(profile, paths)),
-                "risk":      asyncio.create_task(_evaluate_risk(profile, paths)),
-                "lifestyle": asyncio.create_task(_evaluate_lifestyle(profile, paths)),
+                "career":    asyncio.create_task(_evaluate_career(profile, selected)),
+                "finance":   asyncio.create_task(_evaluate_finance(profile, selected)),
+                "risk":      asyncio.create_task(_evaluate_risk(profile, selected)),
+                "lifestyle": asyncio.create_task(_evaluate_lifestyle(profile, selected)),
             }
 
             results: dict[str, object] = {}
@@ -344,15 +553,38 @@ async def simulate_stream(profile: UserProfile) -> StreamingResponse:
                     yield sse(name, result.model_dump())
 
             yield sse("stage", {"stage": "deciding"})
-            decision = await _decide(
+            initial = await _decide(
                 profile,
-                paths,
+                selected,
                 results["career"],     # type: ignore[arg-type]
                 results["finance"],    # type: ignore[arg-type]
                 results["risk"],       # type: ignore[arg-type]
                 results["lifestyle"],  # type: ignore[arg-type]
             )
-            yield sse("decision", decision.model_dump())
+
+            yield sse("stage", {"stage": "critiquing"})
+            critique = await _critique(
+                profile,
+                selected,
+                results["career"],     # type: ignore[arg-type]
+                results["finance"],    # type: ignore[arg-type]
+                results["risk"],       # type: ignore[arg-type]
+                results["lifestyle"],  # type: ignore[arg-type]
+                initial,
+            )
+
+            yield sse("stage", {"stage": "revising"})
+            revised = await _revise_decision(
+                profile,
+                selected,
+                results["career"],     # type: ignore[arg-type]
+                results["finance"],    # type: ignore[arg-type]
+                results["risk"],       # type: ignore[arg-type]
+                results["lifestyle"],  # type: ignore[arg-type]
+                initial,
+                critique,
+            )
+            yield sse("decision", revised.model_dump())
             yield sse("done", {"ok": True})
         except Exception as exc:
             yield sse("error", {"error": str(exc)})

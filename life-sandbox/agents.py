@@ -1,14 +1,19 @@
 """Agent factories for the life-sandbox pipeline.
 
-Main pipeline (6 agents — coordinator + 4 parallel evaluators + decision):
-  - coordinator    : profile → 3 candidate path archetypes
-  - career_eval    : profile + paths → CareerOutput     (parallel)
-  - finance_eval   : profile + paths → FinanceOutput    (parallel)
-  - risk_eval      : profile + paths → RiskOutput       (parallel)
-  - lifestyle_eval : profile + paths → LifestyleOutput  (parallel — WLB, pressure, burnout)
-  - decision       : profile + paths + all evals → top-3 ranked paths
+Two-phase pipeline:
+  Phase 1 (POST /candidates):
+    - coordinator    : profile → 5 candidate path archetypes
+  Phase 2 (POST /analyze/stream): the user-selected 1-3 paths flow through
+    - career_eval    : profile + paths → CareerOutput     (parallel)
+    - finance_eval   : profile + paths → FinanceOutput    (parallel)
+    - risk_eval      : profile + paths → RiskOutput       (parallel)
+    - lifestyle_eval : profile + paths → LifestyleOutput  (parallel — WLB, pressure, burnout)
+    - decision       : profile + paths + all evals → ranked paths
+    - critic         : challenges the decision's ranking → CritiqueOutput
 
-Plus two side-channel agents:
+Side-channel agents:
+  - path_expander  : profile + free-form description → PathCandidate
+                     (used when the user types a custom career path)
   - ingest         : raw profile extracts → IngestSummary (field, stage, notes_seed)
   - career_advice  : profile + chosen RankedPath → CareerAdvice (post-pick advice)
 """
@@ -24,10 +29,12 @@ from autogen.beta.config.config import ModelConfig
 from schemas import (
     CareerAdvice,
     CareerOutput,
+    CritiqueOutput,
     DecisionOutput,
     FinanceOutput,
     IngestSummary,
     LifestyleOutput,
+    PathCandidate,
     PathCandidates,
     RiskOutput,
 )
@@ -68,12 +75,31 @@ def build_config() -> ModelConfig:
 
 
 COORDINATOR_PROMPT = (
-    "You are the lead career strategist. Given a user's profile, propose EXACTLY 3 "
+    "You are the lead career strategist. Given a user's profile, propose EXACTLY 5 "
     "DISTINCT, REALISTIC career path archetypes that span a meaningful range of "
-    "trade-offs (e.g. one stable+steady, one growth+volatile, one entrepreneurial). "
+    "trade-offs. Aim for at least one of each: stable corporate IC, high-growth "
+    "startup / founder, specialist (quant, researcher, consultant), creative / "
+    "freelance, and a wildcard the user might not have considered themselves. "
     "Avoid duplicates. Each path should be specific enough to evaluate financially "
     "and stylistically — name the role and typical employer type. Optimize for "
-    "diversity of trade-off profile, not generic 'safe' choices."
+    "diversity of trade-off profile, not generic 'safe' choices. The user will "
+    "pick 1-3 of these to evaluate in depth."
+)
+
+
+PATH_EXPANDER_PROMPT = (
+    "You normalize a user's free-form career idea into a structured PathCandidate "
+    "for the rest of the pipeline. Given the user's profile and a short description "
+    "of a career they have in mind, return:\n"
+    "  - id: snake_case slug (e.g. 'indie_game_studio_founder', 'fed_research_economist')\n"
+    "  - title: short human-readable title (e.g. 'Indie game studio founder')\n"
+    "  - archetype: ONE of corporate_ic, founder, quant, consultant, researcher, freelance, other "
+    "    — pick the closest fit\n"
+    "  - summary: 2-3 sentence pitch describing what this path looks like for THIS user "
+    "    over the next 5 years\n"
+    "If the description is vague, make conservative best guesses anchored in the user's "
+    "field, location, and stage. Be specific enough that the downstream Career / Finance / "
+    "Risk / Lifestyle evaluators can produce meaningful numbers."
 )
 
 
@@ -148,10 +174,41 @@ CAREER_ADVICE_PROMPT = (
 )
 
 
+CRITIQUE_PROMPT = (
+    "You are an adversarial decision critic in a multi-agent career-advisory system. "
+    "Your job is to find PRINCIPLED weaknesses in the decision agent's ranking — "
+    "not contrarianism, but actual issues a thoughtful skeptic would raise.\n\n"
+    "You receive:\n"
+    "  - the user's profile (risk_tolerance, ambition, stage, field)\n"
+    "  - the user-selected candidate paths\n"
+    "  - the career, finance, risk, AND lifestyle evaluator outputs for each\n"
+    "  - the decision agent's ranking with utility scores, why-it-fits, and tradeoffs\n\n"
+    "Look for:\n"
+    "  - Over-optimistic assumptions in evaluator data (salary curves assuming top-quartile "
+    "    placement; ruin_prob ignoring recent layoff trends; happiness curves without "
+    "    realistic dips during grind years).\n"
+    "  - Underweighted risks or hidden downsides (geographic concentration, visa risk, "
+    "    health/burnout in y3-4, partner/family constraints if hinted at in notes).\n"
+    "  - Mismatch with the user's stated profile — does the ranking actually match "
+    "    risk_tolerance and ambition, or is it pulling them somewhere else?\n"
+    "  - Common biases: survivorship bias, hype-cycle bias, hindsight bias, narrative "
+    "    fluency overriding evidence.\n\n"
+    "For each ranked path, return:\n"
+    "  - challenge: 2-3 sentences arguing why this rank/utility might be wrong, OR "
+    "    'No major issues — the rank reflects the evidence' if it's sound.\n"
+    "  - optimism_flags: 1-4 specific evaluator assumptions that should be questioned.\n\n"
+    "Plus an overall_challenge (the strongest single dissent — one paragraph), and "
+    "name the most_overrated_path_id and most_underrated_path_id from the user-selected "
+    "set. Set those to null if the ranking is genuinely sound.\n\n"
+    "BE PRINCIPLED. If the decision is solid, say so. Don't manufacture critiques to "
+    "justify your existence — that's worse than nothing."
+)
+
+
 DECISION_PROMPT = (
     "You are the decision agent. You receive:\n"
     "  - the user's profile (risk_tolerance 0..1, ambition 0..1)\n"
-    "  - 3 candidate paths\n"
+    "  - 1-5 candidate paths the user picked (typically 1-3 in the new flow)\n"
     "  - career, finance, risk, AND lifestyle evaluations for each\n\n"
     "Compute a utility score per path using something like:\n"
     "  utility = ambition          * normalize(growth_rate)\n"
@@ -167,7 +224,7 @@ DECISION_PROMPT = (
     "(hours, pressure, burnout) when relevant. Surface salary curves, EV, ruin prob, "
     "growth rate, work hours, pressure level, wlb_score, and burnout prob into each "
     "RankedPath verbatim from the inputs.\n\n"
-    "Return all 3 paths sorted by utility, highest first."
+    "Return all of the user-picked paths sorted by utility, highest first."
 )
 
 
@@ -193,6 +250,15 @@ def build_coordinator() -> Agent:
         prompt=COORDINATOR_PROMPT,
         config=build_config(),
         response_schema=PathCandidates,
+    )
+
+
+def build_path_expander() -> Agent:
+    return Agent(
+        name="path_expander",
+        prompt=PATH_EXPANDER_PROMPT,
+        config=build_config(),
+        response_schema=PathCandidate,
     )
 
 
@@ -238,6 +304,15 @@ def build_decision_agent() -> Agent:
         prompt=DECISION_PROMPT,
         config=build_config(),
         response_schema=DecisionOutput,
+    )
+
+
+def build_critic() -> Agent:
+    return Agent(
+        name="critic",
+        prompt=CRITIQUE_PROMPT,
+        config=build_config(),
+        response_schema=CritiqueOutput,
     )
 
 
