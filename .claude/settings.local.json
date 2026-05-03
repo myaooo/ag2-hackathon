@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import autogen; print\\(autogen.__version__\\)\"e)",
+      "Bash(python3 *)"
+    ]
+  }
+}
