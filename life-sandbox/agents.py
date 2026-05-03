@@ -1,12 +1,15 @@
 """Agent factories for the life-sandbox pipeline.
 
-Six agents:
-  - coordinator   : profile → 3 candidate path archetypes
-  - career_eval   : profile + paths → CareerOutput  (parallel)
-  - finance_eval  : profile + paths → FinanceOutput (parallel)
-  - risk_eval     : profile + paths → RiskOutput    (parallel)
-  - decision      : profile + paths + all evals → top-3 ranked paths
-  - ingest        : raw extracts → IngestSummary (field, stage, notes_seed)
+Main pipeline (5 agents — coordinator + 3 parallel evaluators + decision):
+  - coordinator    : profile → 3 candidate path archetypes
+  - career_eval    : profile + paths → CareerOutput  (parallel)
+  - finance_eval   : profile + paths → FinanceOutput (parallel)
+  - risk_eval      : profile + paths → RiskOutput    (parallel)
+  - decision       : profile + paths + all evals → top-3 ranked paths
+
+Plus two side-channel agents:
+  - ingest         : raw profile extracts → IngestSummary (field, stage, notes_seed)
+  - career_advice  : profile + chosen RankedPath → CareerAdvice (post-pick advice)
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from autogen.beta.config import GeminiConfig, OpenAIConfig
 from autogen.beta.config.config import ModelConfig
 
 from schemas import (
+    CareerAdvice,
     CareerOutput,
     DecisionOutput,
     FinanceOutput,
@@ -102,6 +106,26 @@ RISK_PROMPT = (
     "Founders have high ruin (≥0.5), big-tech ICs low (≤0.05). Layoff hazard rose in "
     "2023-2025 even at big tech (~0.10/yr). Be specific — this is the agent the user "
     "trusts to surface bad scenarios."
+)
+
+
+CAREER_ADVICE_PROMPT = (
+    "You are a concrete career-coaching agent. You receive the user's profile and ONE "
+    "career path they have committed to. Return three lists of suggestions to help them "
+    "improve their profile toward that path:\n"
+    "  - courses — named courses, MOOCs, books, or certifications (e.g. 'CS229 Stanford', "
+    "    'Designing Data-Intensive Applications by Kleppmann', 'CFA Level I'). NOT generic "
+    "    'take an online course'. 3-6 items.\n"
+    "  - programs — internships, fellowships, summer programs to apply to (e.g. 'YC Summer "
+    "    2026', 'Anthropic residency', 'Citadel summer analyst', 'NSF REU at Berkeley'). "
+    "    Concrete program names, not categories. 3-6 items.\n"
+    "  - personal_projects — 3-6 specific buildable portfolio projects, each 1-2 sentences, "
+    "    concrete enough that the user could start tomorrow.\n"
+    "  - headline — one sentence framing what to focus on FIRST.\n\n"
+    "Anchor advice to the user's stage (high_school / undergrad / new_grad), field, and "
+    "location. A high-schooler doesn't apply to YC — they target USACO, Regeneron STS, "
+    "or summer-camp programs. A new-grad does apply to YC, residencies, full-time roles. "
+    "Use path_id verbatim from the input."
 )
 
 
@@ -191,4 +215,13 @@ def build_ingest_agent() -> Agent:
         prompt=INGEST_PROMPT,
         config=build_config(),
         response_schema=IngestSummary,
+    )
+
+
+def build_career_advice_agent() -> Agent:
+    return Agent(
+        name="career_advice",
+        prompt=CAREER_ADVICE_PROMPT,
+        config=build_config(),
+        response_schema=CareerAdvice,
     )
