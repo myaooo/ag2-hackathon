@@ -28,16 +28,130 @@ POST /simulate (UserProfile)
 
 5 LLM calls per request (1 coordinator + 3 evaluators in parallel + 1 decision).
 
-## Running
+## Local development setup
+
+### Prerequisites
+
+- **Python 3.11+** — `python3 --version` to check.
+- **[uv](https://github.com/astral-sh/uv)** (recommended) — one-line install: `curl -LsSf https://astral.sh/uv/install.sh | sh`. Plain `pip` works too.
+- **An LLM API key** for one of the supported providers:
+  - **OpenAI-compatible** (the `.env.example` default) — wired through **OpenRouter** (`base_url=https://openrouter.ai/api/v1`), so the `OPENAI_API_KEY` slot wants an OpenRouter key from <https://openrouter.ai/keys>. The default model `google/gemini-2.5-pro` is OpenRouter's Gemini route. To use the **official OpenAI API** directly, edit `agents.py` to remove the `base_url=` argument and put a real `sk-...` key in `OPENAI_API_KEY`.
+  - **Gemini direct** — set `LLM_PROVIDER=gemini` and supply `GEMINI_API_KEY` from <https://aistudio.google.com/apikey>. (The Python code's fallback default when no `.env` is present is also `gemini`.)
+
+### 1. Install dependencies
+
+From the repo root:
 
 ```bash
 cd life-sandbox
+uv sync                     # creates .venv and installs everything from pyproject.toml + uv.lock
+# OR with pip:
+# python -m venv .venv && source .venv/bin/activate && pip install -e .
+```
+
+`ag2` is installed from the GitHub `main` branch (see `pyproject.toml`), so the
+first sync clones the repo — give it ~30 seconds.
+
+### 2. Configure environment
+
+```bash
 cp .env.example .env
-# Add GEMINI_API_KEY=... (or OPENAI_API_KEY=... and set LLM_PROVIDER=openai)
-uv sync   # or: pip install -e .
-python backend.py
-# Server on http://localhost:8765
-# Interactive docs at http://localhost:8765/docs
+```
+
+Edit `.env`. The template ships with the OpenRouter setup pre-selected:
+
+```ini
+LLM_PROVIDER=openai                 # uses OpenRouter (base_url set in agents.py)
+MODEL=google/gemini-2.5-pro         # any OpenRouter model id works
+OPENAI_API_KEY=sk-or-...            # OpenRouter key
+# PORT=8765                         # optional
+```
+
+Or switch to Gemini direct:
+
+```ini
+LLM_PROVIDER=gemini
+MODEL=gemini-2.5-flash              # optional override
+GEMINI_API_KEY=AIza...
+```
+
+The server **fails fast** at startup if the key for the selected provider
+is missing — there's no silent fallback.
+
+### 3. Run the server
+
+```bash
+# Production-style (single worker, no reload)
+uv run python backend.py
+
+# Recommended for dev — auto-reload on code changes
+uv run uvicorn backend:app --reload --port 8765
+```
+
+You should see:
+
+```
+INFO:     Uvicorn running on http://0.0.0.0:8765
+INFO:     Started reloader process ...
+```
+
+### 4. Verify it's alive
+
+| URL | What to expect |
+|---|---|
+| <http://localhost:8765/>           | The entry-page form |
+| <http://localhost:8765/docs>       | FastAPI's interactive OpenAPI UI — try a request from the browser |
+| <http://localhost:8765/healthz>    | `{"ok": true, "provider": "gemini", "model": "..."}` |
+
+End-to-end smoke test from the terminal:
+
+```bash
+curl -s -X POST http://localhost:8765/simulate \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "stage": "undergrad",
+        "field": "Computer Science",
+        "location": "NYC",
+        "risk_tolerance": 0.4,
+        "ambition": 0.7,
+        "notes": "Curious about AI but worried about hype cycles"
+      }' | jq '.top3[].title'
+```
+
+Expected: 3 path titles, total request time roughly 8–20s depending on
+provider and model. Most of that wall time is the parallel evaluator round.
+
+### 5. Iterating
+
+- **Tweak a prompt** → save `agents.py`, uvicorn reloads, hit the form again.
+- **Tweak the schema** → save `schemas.py`, reload — the OpenAPI UI at `/docs` regenerates instantly so the frontend teammate sees the new shape immediately.
+- **Tweak the pipeline / FastAPI route** → save `backend.py`, reload.
+- **Tweak the entry page** → save `frontend.html`, hard-refresh the browser (no reload needed; the file is served on every request).
+
+### 6. Common issues
+
+| Symptom | Fix |
+|---|---|
+| `SystemExit: GEMINI_API_KEY is required ...` | Missing or misnamed env var. Check `.env` and that you launched from `life-sandbox/` so `python-dotenv` finds it. |
+| `ImportError: ... requires optional dependencies. Install with pip install "ag2[gemini]"` | `uv sync` didn't run, or you're running outside the project venv. Re-run `uv sync` and use `uv run …`. |
+| First request hangs ~30s, then errors | Provider rate-limit or model name typo. Check `/healthz` for the active model. |
+| `pydantic.ValidationError` from a `reply.content()` call | The model returned a malformed structured response. The pipeline already retries twice; if it persists, look at the prompt for that agent or try a stronger model via `MODEL=...`. |
+| CORS error in the browser console | Backend wide-opens CORS already — make sure the frontend dev server is hitting the same origin or set the `fetch` URL explicitly. |
+| Port 8765 already in use | `PORT=9000 uv run python backend.py` or kill the other process. |
+
+### 7. Project layout
+
+```
+life-sandbox/
+├── pyproject.toml      # dependencies (ag2, fastapi, uvicorn)
+├── uv.lock             # pinned dependency versions
+├── .env.example        # env template — copy to .env
+├── schemas.py          # Pydantic models (request, intermediate, response)
+├── agents.py           # 5 agent factories + provider/config selection
+├── backend.py          # FastAPI app + orchestration pipeline + SSE endpoint
+├── frontend.html       # Self-contained entry-page form (served at GET /)
+├── README.md           # ← this file
+└── DESIGN.md           # design + implementation summary
 ```
 
 ## API
