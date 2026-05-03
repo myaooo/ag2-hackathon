@@ -1,856 +1,186 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Life Sandbox — AG2 Beta</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <style>
-      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Life Sandbox — AG2 Beta</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-      :root {
-        --bg-0: #0b0d12;
-        --bg-1: #14171f;
-        --bg-2: #1c2030;
-        --border: #2a2f42;
-        --border-strong: #3d4360;
-        --text-primary: #f1f3f8;
-        --text-secondary: #a0a8be;
-        --text-muted: #6e7693;
-        --accent: #6366f1;
-        --accent-hover: #7c7ff5;
-        --accent-glow: rgba(99, 102, 241, 0.25);
-        --good: #34d399;
-        --warn: #fbbf24;
-        --bad: #f87171;
-        --chip-bg: rgba(99, 102, 241, 0.12);
-      }
+    :root {
+      --bg:      #07090f;
+      --bg1:     #0d1117;
+      --bg2:     #161b27;
+      --indigo:  #6366f1;
+      --purple:  #8b5cf6;
+      --teal:    #2dd4bf;
+      --green:   #4ade80;
+      --amber:   #fbbf24;
+      --red:     #f87171;
+      --text:    #f0f6fc;
+      --muted:   #8b949e;
+      --border:  rgba(255,255,255,0.07);
+    }
 
-      html, body { height: 100%; }
-      body {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        color: var(--text-primary);
-        background:
-          radial-gradient(ellipse 80% 60% at 50% -20%, rgba(99, 102, 241, 0.18), transparent 60%),
-          var(--bg-0);
-        min-height: 100vh;
-        line-height: 1.5;
-      }
+    html, body { height: 100%; overflow: hidden; font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); }
 
-      header {
-        padding: 36px 32px 28px;
-        max-width: 1280px;
-        margin: 0 auto;
-      }
-      header .brand {
-        display: flex; align-items: baseline; gap: 12px;
-        font-weight: 800; font-size: 24px; letter-spacing: -0.02em;
-      }
-      header .brand .dot {
-        display: inline-block; width: 10px; height: 10px; border-radius: 50%;
-        background: var(--accent); box-shadow: 0 0 16px var(--accent-glow);
-      }
-      header .brand .badge {
-        font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
-        text-transform: uppercase; color: var(--text-muted);
-        padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px;
-      }
-      header .tagline {
-        margin-top: 8px; color: var(--text-secondary); font-size: 15px;
-        max-width: 720px;
-      }
+    #app { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
 
-      main {
-        max-width: 1280px; margin: 0 auto;
-        padding: 8px 32px 64px;
-        display: grid;
-        grid-template-columns: minmax(360px, 420px) 1fr;
-        gap: 28px;
-      }
-      @media (max-width: 900px) {
-        main { grid-template-columns: 1fr; }
-      }
+    /* ── Background ── */
+    .bg-layer {
+      position: absolute; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(99,102,241,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 30% at 90% 80%,  rgba(139,92,246,0.10) 0%, transparent 50%),
+        var(--bg);
+    }
+    .stars { position: absolute; inset: 0; pointer-events: none; }
+    .star {
+      position: absolute; border-radius: 50%; background: white;
+      animation: twinkle var(--d, 3s) ease-in-out infinite var(--delay, 0s);
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: var(--min, .1); }
+      50%       { opacity: var(--max, .6); }
+    }
 
-      .panel {
-        background: var(--bg-1);
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 24px;
-      }
+    /* ── Progress bar (top edge) ── */
+    #progress-bar {
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: rgba(255,255,255,0.04); z-index: 100;
+    }
+    #progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--indigo), var(--purple));
+      transition: width 0.6s ease;
+      width: 0%;
+    }
 
-      /* ============== Form ============== */
-      .form-panel h2 {
-        font-size: 13px; font-weight: 700; letter-spacing: 0.08em;
-        text-transform: uppercase; color: var(--text-muted);
-        margin-bottom: 18px;
-      }
-      .field { margin-bottom: 18px; }
+    /* ── Screens ── */
+    .screen {
+      position: absolute; inset: 0;
+      padding: 40px 24px 130px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.45s ease, transform 0.45s ease;
+      transform: translateY(20px);
+    }
+    .screen.active  { opacity: 1; pointer-events: all; transform: translateY(0); }
+    .screen.exit-up { opacity: 0; transform: translateY(-24px); }
+    .screen.exit-dn { opacity: 0; transform: translateY(24px); }
 
-      .import-panel {
-        grid-column: 1 / -1;       /* span both grid columns */
-        margin-bottom: 24px;
-        padding: 16px;
-        border: 1px dashed var(--border);
-        border-radius: 8px;
-        background: rgba(255,255,255,0.02);
-      }
-      .import-panel h3 {
-        margin: 0 0 12px;
-        font-size: 13px;
-        font-weight: 600;
-        text-transform: uppercase;
-        color: var(--text-muted);
-      }
-      .import-panel .field { margin-bottom: 12px; }
-      .import-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
-      .import-actions button {
-        padding: 8px 16px;
-        border-radius: 6px;
-        border: 1px solid var(--border);
-        background: transparent;
-        color: var(--text-primary);
-        cursor: pointer;
-        font: inherit;
-      }
-      .import-actions button:hover:not(:disabled) { background: rgba(255,255,255,0.05); }
-      .import-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
-      .pills { display: flex; flex-wrap: wrap; gap: 6px; }
-      .pill {
-        font-size: 11px;
-        padding: 3px 8px;
-        border-radius: 999px;
-        border: 1px solid var(--border);
-        color: var(--text-muted);
-      }
-      .pill.ok { color: #6ee7b7; border-color: #6ee7b7; }
-      .pill.warn { color: #fbbf24; border-color: #fbbf24; }
-      .pill.skip { opacity: 0.5; }
+    /* ── Step navigation shared buttons ── */
+    .btn-back {
+      padding: 10px 20px; border-radius: 10px;
+      background: transparent; border: 1px solid rgba(255,255,255,0.1);
+      color: var(--muted); font-family: inherit; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-back:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
 
-      .field label {
-        display: block; font-size: 13px; font-weight: 600;
-        color: var(--text-secondary); margin-bottom: 6px;
-      }
-      .field input[type="text"],
-      .field input[type="url"],
-      .field select,
-      .field textarea {
-        width: 100%;
-        background: var(--bg-2);
-        color: var(--text-primary);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 10px 12px;
-        font-family: inherit; font-size: 14px;
-        outline: none;
-        transition: border-color 0.15s, box-shadow 0.15s;
-      }
-      .field input[type="text"]:focus,
-      .field input[type="url"]:focus,
-      .field select:focus,
-      .field textarea:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px var(--accent-glow);
-      }
-      .field textarea { resize: vertical; min-height: 64px; }
+    .btn-next {
+      padding: 13px 30px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--indigo), var(--purple));
+      color: white; font-family: inherit; font-size: 15px; font-weight: 700;
+      border: none; cursor: pointer;
+      box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+      transition: opacity 0.15s, transform 0.1s;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .btn-next:hover  { opacity: 0.9; }
+    .btn-next:active { transform: scale(0.97); }
 
-      .slider-field { margin-bottom: 18px; }
-      .slider-row {
-        display: flex; align-items: center; gap: 12px;
-      }
-      .slider-row input[type="range"] {
-        flex: 1; accent-color: var(--accent); height: 4px;
-      }
-      .slider-row .value {
-        font-variant-numeric: tabular-nums; font-weight: 600;
-        font-size: 13px; color: var(--text-primary); min-width: 32px;
-        text-align: right;
-      }
-      .slider-hint {
-        display: flex; justify-content: space-between;
-        font-size: 11px; color: var(--text-muted); margin-top: 4px;
-      }
+    /* Step dots */
+    .step-dots { display: flex; gap: 5px; align-items: center; }
+    .sdot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      transition: all 0.3s;
+    }
+    .sdot.cur  { background: var(--indigo); width: 16px; border-radius: 3px; }
+    .sdot.done { background: rgba(99,102,241,0.5); }
 
-      button.submit {
-        width: 100%;
-        background: var(--accent);
-        color: white;
-        font-family: inherit; font-size: 14px; font-weight: 600;
-        padding: 12px 16px;
-        border: none; border-radius: 8px;
-        cursor: pointer;
-        transition: background 0.15s, transform 0.1s;
-        margin-top: 8px;
-      }
-      button.submit:hover:not(:disabled) {
-        background: var(--accent-hover);
-      }
-      button.submit:active:not(:disabled) { transform: translateY(1px); }
-      button.submit:disabled {
-        background: var(--bg-2); color: var(--text-muted); cursor: not-allowed;
-      }
+    /* Step shell */
+    .step-shell { width: 100%; max-width: 540px; }
+    .step-q    { font-size: clamp(22px,4vw,32px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; margin-bottom: 8px; }
+    .step-hint { font-size: 14px; color: var(--muted); margin-bottom: 32px; line-height: 1.5; }
+    .step-nav  { display: flex; align-items: center; justify-content: space-between; }
 
-      /* ============== Right pane ============== */
-      .results-panel { min-height: 480px; }
-      .results-panel.empty {
-        display: flex; align-items: center; justify-content: center;
-        color: var(--text-muted); font-size: 14px;
-        text-align: center; padding: 48px;
-      }
-      .results-panel.empty .empty-icon {
-        font-size: 36px; margin-bottom: 12px; opacity: 0.4;
-      }
+    /* Error banner */
+    .error-banner {
+      background: rgba(248,113,113,0.1); color: var(--red);
+      border: 1px solid rgba(248,113,113,0.3);
+      padding: 12px 16px; border-radius: 10px;
+      font-size: 13px; margin-top: 16px; width: 100%;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="bg-layer"></div>
+  <div class="stars" id="stars"></div>
+  <div id="progress-bar"><div id="progress-fill"></div></div>
 
-      /* ============== Progress ============== */
-      .progress { margin-bottom: 20px; }
-      .progress h3 {
-        font-size: 13px; font-weight: 700; letter-spacing: 0.08em;
-        text-transform: uppercase; color: var(--text-muted);
-        margin-bottom: 12px;
-      }
-      .step {
-        display: flex; align-items: center; gap: 10px;
-        padding: 8px 0; font-size: 13px;
-        color: var(--text-muted);
-        transition: color 0.2s;
-      }
-      .step.active { color: var(--text-primary); }
-      .step.done { color: var(--good); }
-      .step.error { color: var(--bad); }
-      .step .indicator {
-        display: inline-flex; align-items: center; justify-content: center;
-        width: 18px; height: 18px; border-radius: 50%;
-        border: 1.5px solid currentColor; font-size: 11px; font-weight: 600;
-        flex-shrink: 0;
-      }
-      .step.active .indicator {
-        background: var(--accent); border-color: var(--accent); color: white;
-        animation: pulse 1.4s ease-in-out infinite;
-      }
-      .step.done .indicator { background: var(--good); border-color: var(--good); color: var(--bg-0); }
-      .step.error .indicator { background: var(--bad); border-color: var(--bad); color: white; }
-      @keyframes pulse {
-        0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
-        50%      { box-shadow: 0 0 0 6px transparent; }
-      }
+  <!-- Screens inserted in Tasks 2-8 -->
 
-      /* ============== Cards ============== */
-      .cards { display: flex; flex-direction: column; gap: 16px; }
-      .card {
-        background: var(--bg-1);
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 20px;
-        transition: border-color 0.2s, transform 0.2s;
-      }
-      .card.rank-1 { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-glow); }
-      .card-header {
-        display: flex; align-items: flex-start; justify-content: space-between;
-        gap: 12px; margin-bottom: 12px;
-      }
-      .card-title { font-size: 17px; font-weight: 700; }
-      .card-archetype {
-        font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
-        text-transform: uppercase; color: var(--text-muted);
-        margin-top: 2px;
-      }
-      .card-rank {
-        display: inline-flex; align-items: center;
-        background: var(--chip-bg); color: var(--accent);
-        border-radius: 999px; padding: 4px 10px;
-        font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
-      }
-      .card .summary {
-        color: var(--text-secondary); font-size: 13px;
-        margin-bottom: 14px;
-      }
-      .chart-wrap { height: 100px; margin-bottom: 14px; }
-      .chips {
-        display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px;
-      }
-      .chip {
-        font-size: 11px; font-weight: 600;
-        padding: 4px 10px; border-radius: 999px;
-        background: var(--bg-2); color: var(--text-secondary);
-        border: 1px solid var(--border);
-      }
-      .chip.good { color: var(--good); border-color: rgba(52, 211, 153, 0.3); }
-      .chip.warn { color: var(--warn); border-color: rgba(251, 191, 36, 0.3); }
-      .chip.bad  { color: var(--bad);  border-color: rgba(248, 113, 113, 0.3); }
-      .why-block { margin-bottom: 8px; }
-      .why-block .label {
-        font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
-        text-transform: uppercase; color: var(--text-muted);
-        margin-bottom: 3px;
-      }
-      .why-block .text { font-size: 13px; color: var(--text-primary); }
+</div>
+<script>
+  // ── Starfield ──
+  (function() {
+    const el = document.getElementById('stars');
+    for (let i = 0; i < 80; i++) {
+      const s = document.createElement('div');
+      s.className = 'star';
+      const sz = Math.random() * 2 + 1;
+      s.style.cssText = `width:${sz}px;height:${sz}px;top:${Math.random()*100}%;left:${Math.random()*100}%;` +
+        `--d:${2+Math.random()*4}s;--delay:${-Math.random()*4}s;` +
+        `--min:${.05+Math.random()*.1};--max:${.3+Math.random()*.5}`;
+      el.appendChild(s);
+    }
+  })();
 
-      .error-banner {
-        background: rgba(248, 113, 113, 0.1);
-        color: var(--bad);
-        border: 1px solid rgba(248, 113, 113, 0.3);
-        padding: 12px 14px;
-        border-radius: 8px;
-        font-size: 13px;
-        margin-top: 16px;
-      }
+  // ── Screen state ──
+  let current = 1;
+  const PROFILE_STEPS = 6; // screens 2–7
 
-      /* ============== Career advice ============== */
-      .advice-btn {
-        margin-top: 8px;
-        background: transparent;
-        color: var(--accent);
-        border: 1px solid var(--border-strong);
-        font-family: inherit; font-size: 12px; font-weight: 600;
-        padding: 8px 14px; border-radius: 8px;
-        cursor: pointer;
-        transition: background 0.15s, border-color 0.15s;
-      }
-      .advice-btn:hover:not(:disabled) {
-        background: rgba(99, 102, 241, 0.08);
-        border-color: var(--accent);
-      }
-      .advice-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-      .advice-block {
-        margin-top: 14px;
-        padding: 14px;
-        background: var(--bg-2);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        font-size: 13px;
-      }
-      .advice-block h4 {
-        font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
-        text-transform: uppercase; color: var(--text-muted);
-        margin: 12px 0 6px;
-      }
-      .advice-block h4:first-of-type { margin-top: 0; }
-      .advice-block .headline {
-        font-size: 14px; font-weight: 600; color: var(--text-primary);
-        margin-bottom: 8px;
-      }
-      .advice-block ul {
-        list-style: disc inside;
-        color: var(--text-secondary);
-        padding-left: 4px;
-      }
-      .advice-block ul li { margin-bottom: 3px; }
-    </style>
-  </head>
-  <body>
-    <header>
-      <div class="brand">
-        <span class="dot"></span>
-        Life Sandbox
-        <span class="badge">AG2 Beta · Multi-Agent</span>
-      </div>
-      <div class="tagline">
-        Tell us about yourself. Five specialist agents will propose three
-        career paths and rank them for <em>your</em> risk tolerance and
-        ambition.
-      </div>
-    </header>
+  function goTo(n, forward = true) {
+    const prev = document.getElementById('s' + current);
+    const next = document.getElementById('s' + n);
+    if (!next) return;
+    prev.classList.remove('active');
+    prev.classList.add(forward ? 'exit-up' : 'exit-dn');
+    setTimeout(() => prev.classList.remove('exit-up', 'exit-dn'), 500);
+    next.classList.add('active');
+    current = n;
+    // Progress bar: 0% on landing, fills across steps 2–7, full on sim
+    const pct = n <= 1 ? 0 : n >= 8 ? 100 : Math.round(((n - 1) / PROFILE_STEPS) * 100);
+    document.getElementById('progress-fill').style.width = pct + '%';
+    updateWalker(n);
+    if (n >= 2 && n <= 7) renderDots(n);
+  }
 
-    <main>
-      <!-- ======================= IMPORT PANEL ======================= -->
-      <section class="panel form-panel import-panel">
-        <h3>Bring your real profile (optional)</h3>
-        <div class="field">
-          <label for="linkedin_url">LinkedIn URL</label>
-          <input type="url" id="linkedin_url" name="linkedin_url"
-            placeholder="https://www.linkedin.com/in/your-handle" />
-        </div>
-        <div class="field">
-          <label for="github_url">GitHub URL</label>
-          <input type="url" id="github_url" name="github_url"
-            placeholder="https://github.com/your-handle" />
-        </div>
-        <div class="field">
-          <label for="other_url">Other URL (personal site, portfolio, blog)</label>
-          <input type="url" id="other_url" name="other_url"
-            placeholder="https://yourdomain.com" />
-        </div>
-        <div class="field">
-          <label for="pasted_text">Or paste profile text</label>
-          <textarea id="pasted_text" name="pasted_text" rows="4"
-            placeholder="Paste your résumé, About section, or anything you'd want a career advisor to see."></textarea>
-        </div>
-        <div class="import-actions">
-          <button type="button" id="import-btn">Import &amp; pre-fill</button>
-          <div class="pills" id="import-pills"></div>
-        </div>
-      </section>
+  function advance(n) { goTo(n, true);  }
+  function retreat(n) { goTo(n, false); }
 
-      <!-- ======================= FORM ======================= -->
-      <section class="panel form-panel">
-        <h2>Your profile</h2>
-        <form id="profile-form">
-          <div class="field">
-            <label for="stage">Where are you?</label>
-            <select id="stage" name="stage" required>
-              <option value="high_school">High school student</option>
-              <option value="undergrad" selected>Undergrad</option>
-              <option value="new_grad">Recent graduate</option>
-            </select>
-          </div>
+  function renderDots(screenNum) {
+    const el = document.getElementById('dots-s' + screenNum);
+    if (!el) return;
+    el.innerHTML = '';
+    for (let i = 1; i <= PROFILE_STEPS; i++) {
+      const d = document.createElement('div');
+      const step = screenNum - 1; // screen 2 = step 1, screen 7 = step 6
+      d.className = 'sdot' + (i === step ? ' cur' : i < step ? ' done' : '');
+      el.appendChild(d);
+    }
+  }
 
-          <div class="field">
-            <label for="field">Field / major</label>
-            <input
-              type="text" id="field" name="field" required
-              placeholder="e.g. Computer Science"
-              value="Computer Science"
-            />
-          </div>
-
-          <div class="field">
-            <label for="location">Preferred location</label>
-            <input
-              type="text" id="location" name="location" required
-              placeholder="e.g. NYC, San Francisco, Remote"
-              value="NYC"
-            />
-          </div>
-
-          <div class="slider-field">
-            <label for="risk_tolerance">
-              Risk tolerance · <span id="risk_tolerance_val">0.40</span>
-            </label>
-            <div class="slider-row">
-              <input type="range" id="risk_tolerance" name="risk_tolerance"
-                     min="0" max="1" step="0.05" value="0.4" />
-            </div>
-            <div class="slider-hint">
-              <span>Avoid volatility</span><span>Embrace volatility</span>
-            </div>
-          </div>
-
-          <div class="slider-field">
-            <label for="ambition">
-              Ambition · <span id="ambition_val">0.70</span>
-            </label>
-            <div class="slider-row">
-              <input type="range" id="ambition" name="ambition"
-                     min="0" max="1" step="0.05" value="0.7" />
-            </div>
-            <div class="slider-hint">
-              <span>Stable plateau</span><span>Optimize for growth</span>
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="notes">Anything else? (optional)</label>
-            <textarea id="notes" name="notes" rows="3"
-              placeholder="Goals, constraints, things you care about..."></textarea>
-          </div>
-
-          <button type="submit" class="submit" id="submit-btn">
-            Explore my paths
-          </button>
-        </form>
-      </section>
-
-      <!-- ====================== RESULTS ====================== -->
-      <section class="panel results-panel empty" id="results">
-        <div>
-          <div class="empty-icon">🧭</div>
-          <div>Fill in your profile and the agents will get to work.</div>
-        </div>
-      </section>
-    </main>
-
-    <script>
-      // ---- Slider live values ----
-      for (const id of ['risk_tolerance', 'ambition']) {
-        const slider = document.getElementById(id);
-        const display = document.getElementById(id + '_val');
-        slider.addEventListener('input', () => {
-          display.textContent = parseFloat(slider.value).toFixed(2);
-        });
-      }
-
-      // ---- Pipeline stages displayed in the progress UI ----
-      const STAGES = [
-        { id: 'candidates', label: 'Generating 3 candidate paths' },
-        { id: 'career',     label: 'Career trajectory analysis' },
-        { id: 'finance',    label: 'Compensation modeling' },
-        { id: 'risk',       label: 'Risk and downside analysis' },
-        { id: 'decision',   label: 'Ranking by your utility' },
-      ];
-
-      const $ = (sel, root = document) => root.querySelector(sel);
-      const charts = [];
-      let lastProfile = null;  // captured from the form, reused by the /career-advice POST
-
-      function fmtMoney(n) {
-        if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M';
-        if (n >= 1_000)     return '$' + Math.round(n / 1_000) + 'k';
-        return '$' + Math.round(n);
-      }
-      function fmtPct(p) { return Math.round(p * 100) + '%'; }
-
-      function renderProgress() {
-        const stepsHtml = STAGES.map(s => `
-          <div class="step" data-stage="${s.id}">
-            <span class="indicator">·</span>
-            <span class="label">${s.label}</span>
-          </div>
-        `).join('');
-        return `
-          <div class="progress">
-            <h3>Pipeline</h3>
-            ${stepsHtml}
-          </div>
-        `;
-      }
-
-      function setStage(stageId, status, extra = '') {
-        const el = document.querySelector(`[data-stage="${stageId}"]`);
-        if (!el) return;
-        el.classList.remove('active', 'done', 'error');
-        el.classList.add(status);
-        const indicator = el.querySelector('.indicator');
-        if (status === 'done')   indicator.textContent = '✓';
-        else if (status === 'error')  indicator.textContent = '!';
-        else if (status === 'active') indicator.textContent = '…';
-        else indicator.textContent = '·';
-        if (extra) el.querySelector('.label').textContent = extra;
-      }
-
-      function chipClassForRuin(p) {
-        if (p < 0.10) return 'good';
-        if (p < 0.30) return 'warn';
-        return 'bad';
-      }
-
-      // Memo so the advice button click can find the chosen path by id.
-      let lastTop3 = [];
-
-      function renderCards(top3) {
-        // Destroy any existing charts to avoid leaks on re-runs
-        for (const c of charts) c.destroy();
-        charts.length = 0;
-        lastTop3 = top3;
-
-        const html = top3.map((p, idx) => `
-          <article class="card ${idx === 0 ? 'rank-1' : ''}" data-path="${escapeHtml(p.path_id)}">
-            <div class="card-header">
-              <div>
-                <div class="card-title">${escapeHtml(p.title)}</div>
-                <div class="card-archetype">${escapeHtml(p.archetype)}</div>
-              </div>
-              <span class="card-rank">#${idx + 1} · ${(p.utility_score ?? 0).toFixed(2)}</span>
-            </div>
-            <div class="summary">${escapeHtml(p.summary)}</div>
-            <div class="chart-wrap"><canvas id="chart-${idx}"></canvas></div>
-            <div class="chips">
-              <span class="chip good">EV ${fmtMoney(p.ev_5y)}</span>
-              <span class="chip ${chipClassForRuin(p.ruin_prob_5y)}">Ruin ${fmtPct(p.ruin_prob_5y)}</span>
-              <span class="chip">Growth ${fmtPct(p.growth_rate)}</span>
-            </div>
-            <div class="why-block">
-              <div class="label">Why it fits you</div>
-              <div class="text">${escapeHtml(p.why)}</div>
-            </div>
-            <div class="why-block">
-              <div class="label">Trade-offs</div>
-              <div class="text">${escapeHtml(p.tradeoffs)}</div>
-            </div>
-            <button class="advice-btn" data-path="${escapeHtml(p.path_id)}">
-              I'd pick this — get my career advice →
-            </button>
-            <div class="advice-mount" data-mount="${escapeHtml(p.path_id)}"></div>
-          </article>
-        `).join('');
-        return `<div class="cards">${html}</div>`;
-      }
-
-      function renderAdvice(advice) {
-        return `
-          <div class="advice-block">
-            <div class="headline">${escapeHtml(advice.headline)}</div>
-            <h4>Courses, books, certifications</h4>
-            <ul>${advice.courses.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>
-            <h4>Programs to apply to</h4>
-            <ul>${advice.programs.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>
-            <h4>Personal projects</h4>
-            <ul>${advice.personal_projects.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>
-          </div>
-        `;
-      }
-
-      function drawChart(canvasId, mean, stddev) {
-        const ctx = document.getElementById(canvasId);
-        if (!ctx) return;
-        const labels = mean.map((_, i) => `Y${i + 1}`);
-        const upper = mean.map((m, i) => m + (stddev[i] ?? 0));
-        const lower = mean.map((m, i) => Math.max(0, m - (stddev[i] ?? 0)));
-        const chart = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels,
-            datasets: [
-              {
-                label: '+1σ',
-                data: upper,
-                borderWidth: 0,
-                pointRadius: 0,
-                fill: '+1',
-                backgroundColor: 'rgba(99, 102, 241, 0.15)',
-              },
-              {
-                label: '-1σ',
-                data: lower,
-                borderWidth: 0,
-                pointRadius: 0,
-                fill: false,
-              },
-              {
-                label: 'Mean',
-                data: mean,
-                borderColor: '#6366f1',
-                borderWidth: 2,
-                pointRadius: 0,
-                fill: false,
-                tension: 0.3,
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: {
-              callbacks: { label: c => c.dataset.label + ': ' + fmtMoney(c.parsed.y) }
-            }},
-            scales: {
-              x: { grid: { display: false }, ticks: { color: '#6e7693', font: { size: 10 } } },
-              y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: {
-                color: '#6e7693', font: { size: 10 },
-                callback: v => fmtMoney(v),
-              }},
-            },
-          },
-        });
-        charts.push(chart);
-      }
-
-      function escapeHtml(s) {
-        return String(s ?? '').replace(/[&<>"']/g, c => ({
-          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-        }[c]));
-      }
-
-      // ---- Import panel: POST /ingest, pre-fill form, stash extracts ----
-      let stashedExtracts = [];
-      let lastSeed = '';
-
-      function renderPills(extracts) {
-        const sources = ['linkedin', 'github', 'site', 'paste'];
-        const found = Object.fromEntries(extracts.map(e => [e.source, e]));
-        const labelByPanel = { linkedin: 'LinkedIn', github: 'GitHub', site: 'Other URL', paste: 'Paste' };
-        const pills = sources.map(src => {
-          const ex = found[src];
-          if (!ex) return `<span class="pill skip">– ${labelByPanel[src]}</span>`;
-          if (ex.fetched) return `<span class="pill ok">✓ ${labelByPanel[src]}</span>`;
-          return `<span class="pill warn">⚠ ${labelByPanel[src]} blocked</span>`;
-        });
-        $('#import-pills').innerHTML = pills.join('');
-      }
-
-      $('#import-btn').addEventListener('click', async () => {
-        const btn = $('#import-btn');
-        const body = {
-          linkedin_url: $('#linkedin_url').value.trim() || null,
-          github_url:   $('#github_url').value.trim()   || null,
-          other_url:    $('#other_url').value.trim()    || null,
-          pasted_text:  $('#pasted_text').value.trim()  || null,
-        };
-        const anyProvided = Object.values(body).some(v => v);
-        if (!anyProvided) {
-          $('#import-pills').innerHTML = '<span class="pill warn">paste at least one source</span>';
-          return;
-        }
-        btn.disabled = true;
-        btn.textContent = 'Importing...';
-        try {
-          const res = await fetch('/ingest', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(body),
-          });
-          if (!res.ok) {
-            const err = await res.text();
-            $('#import-pills').innerHTML = `<span class="pill warn">${res.status}: ${escapeHtml(err.slice(0, 80))}</span>`;
-            return;
-          }
-          const data = await res.json();
-          // Pre-fill
-          $('#field').value = data.summary.field || $('#field').value;
-          const VALID_STAGES = ['high_school', 'undergrad', 'new_grad'];
-          if (VALID_STAGES.includes(data.summary.stage)) {
-            $('#stage').value = data.summary.stage;
-          }
-          const seed = data.summary.notes_seed || '';
-          // Strip the previously-injected seed (if any) before appending a fresh one,
-          // so re-Import replaces the seed rather than piling new ones on top.
-          const existing = lastSeed
-            ? $('#notes').value.replace(lastSeed, '').trim()
-            : $('#notes').value.trim();
-          $('#notes').value = existing ? `${existing}\n\n${seed}` : seed;
-          lastSeed = seed;
-          // Stash
-          stashedExtracts = data.extracts || [];
-          renderPills(stashedExtracts);
-        } catch (e) {
-          console.error('ingest failed:', e);
-          $('#import-pills').innerHTML = `<span class="pill warn">network error</span>`;
-        } finally {
-          btn.disabled = false;
-          btn.textContent = 'Import & pre-fill';
-        }
-      });
-
-      // ---- Form submit ----
-      $('#profile-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-
-        const profile = {
-          stage:          $('#stage').value,
-          field:          $('#field').value.trim(),
-          location:       $('#location').value.trim(),
-          risk_tolerance: parseFloat($('#risk_tolerance').value),
-          ambition:       parseFloat($('#ambition').value),
-          notes:          $('#notes').value.trim(),
-          extracts:       stashedExtracts,
-        };
-        lastProfile = profile;
-
-        const btn = $('#submit-btn');
-        btn.disabled = true;
-        btn.textContent = 'Running…';
-
-        const results = $('#results');
-        results.classList.remove('empty');
-        results.innerHTML = renderProgress();
-        setStage('candidates', 'active');
-
-        let res;
-        try {
-          res = await fetch('/simulate/stream', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(profile),
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-          await consumeSSE(res);
-        } catch (err) {
-          showError(err.message || String(err));
-        } finally {
-          btn.disabled = false;
-          btn.textContent = 'Explore my paths';
-        }
-      });
-
-      async function consumeSSE(res) {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let evaluatorsStarted = false;
-        let lastDecision = null;
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-
-          let sep;
-          while ((sep = buffer.indexOf('\n\n')) >= 0) {
-            const block = buffer.slice(0, sep);
-            buffer = buffer.slice(sep + 2);
-            const event = (block.match(/^event:\s*(.+)$/m) || [])[1];
-            const dataStr = (block.match(/^data:\s*(.+)$/m) || [])[1];
-            if (!event || !dataStr) continue;
-
-            let data;
-            try { data = JSON.parse(dataStr); } catch { continue; }
-
-            if (event === 'stage') {
-              if (data.stage === 'candidates') setStage('candidates', 'active');
-              if (data.stage === 'evaluating' && !evaluatorsStarted) {
-                evaluatorsStarted = true;
-                setStage('career', 'active');
-                setStage('finance', 'active');
-                setStage('risk', 'active');
-              }
-              if (data.stage === 'deciding') setStage('decision', 'active');
-            } else if (event === 'candidates') {
-              setStage('candidates', 'done',
-                       `Generated ${data.paths.length} candidate paths`);
-            } else if (event === 'career')  {
-              setStage('career',  'done', 'Career trajectory analysis · done');
-            } else if (event === 'finance') {
-              setStage('finance', 'done', 'Compensation modeling · done');
-            } else if (event === 'risk')    {
-              setStage('risk',    'done', 'Risk and downside analysis · done');
-            } else if (event === 'decision') {
-              setStage('decision', 'done', 'Ranked by your utility');
-              lastDecision = data;
-              const cardsHtml = renderCards(data.top3);
-              const progressHtml = $('#results').querySelector('.progress').outerHTML;
-              $('#results').innerHTML = progressHtml + cardsHtml;
-              data.top3.forEach((p, i) => drawChart(`chart-${i}`, p.salary_curve_5y, p.stddev_curve_5y));
-            } else if (event === 'error') {
-              showError(data.error);
-              return;
-            } else if (event === 'done') {
-              return;
-            }
-          }
-        }
-      }
-
-      function showError(msg) {
-        const div = document.createElement('div');
-        div.className = 'error-banner';
-        div.textContent = 'Error: ' + msg;
-        $('#results').appendChild(div);
-      }
-
-      // ---- Career advice: click "I'd pick this — get my career advice" on a card ----
-      document.addEventListener('click', async (e) => {
-        const btn = e.target.closest('.advice-btn');
-        if (!btn) return;
-
-        const pathId = btn.dataset.path;
-        const chosen = lastTop3.find(p => p.path_id === pathId);
-        const mount = document.querySelector(`[data-mount="${CSS.escape(pathId)}"]`);
-        if (!chosen || !mount || !lastProfile) return;
-
-        btn.disabled = true;
-        btn.textContent = 'Building advice…';
-        mount.innerHTML = '';
-
-        try {
-          const res = await fetch('/career-advice', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ profile: lastProfile, chosen }),
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-          const advice = await res.json();
-          mount.innerHTML = renderAdvice(advice);
-          btn.style.display = 'none';
-        } catch (err) {
-          mount.innerHTML = `<div class="error-banner">Advice failed: ${escapeHtml(err.message || String(err))}</div>`;
-          btn.disabled = false;
-          btn.textContent = "I'd pick this — get my career advice →";
-        }
-      });
-    </script>
-  </body>
+  // Placeholder — implemented in Task 3
+  function updateWalker(n) {}
+</script>
+</body>
 </html>
