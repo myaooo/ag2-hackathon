@@ -424,6 +424,53 @@
     }
     .btn-restart:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
 
+    /* ── Compare panel (radar + table across the picked paths) ── */
+    .compare-panel {
+      margin: 16px 0 20px;
+      padding: 20px;
+      background: var(--bg1);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+    .compare-panel[hidden] { display: none; }
+    .compare-panel h3 {
+      margin: 0 0 12px;
+      font-size: 12px; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--muted);
+    }
+    .compare-legend {
+      display: flex; flex-wrap: wrap; gap: 14px;
+      margin-bottom: 14px;
+    }
+    .compare-legend .item {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--text);
+    }
+    .compare-legend .swatch {
+      width: 10px; height: 10px; border-radius: 2px;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .compare-radar { height: 280px; margin-bottom: 16px; }
+    .compare-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .compare-table th, .compare-table td {
+      text-align: left; padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .compare-table th {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--muted);
+    }
+    .compare-table td.dim {
+      color: var(--muted); font-size: 12px;
+      white-space: nowrap;
+    }
+    .compare-table td.win {
+      color: var(--green); font-weight: 700;
+    }
+    .compare-table td.win::after { content: " ★"; }
+
     /* ── Screen 8: Path selection (NEW — Shape B flow) ── */
     .pick-wrap {
       width: 100%; max-width: 720px;
@@ -938,6 +985,7 @@
       <div class="results-title" id="results-title">Your simulated futures</div>
       <div class="results-sub" id="results-sub">Ranked by utility score</div>
       <div class="path-cards" id="path-cards"></div>
+      <div id="compare-panel" class="compare-panel" hidden></div>
       <button class="btn-restart" onclick="restartFlow()">↺ Start over with different choices</button>
     </div>
   </div>
@@ -1754,6 +1802,119 @@
     `).join('');
 
     top3.forEach((p, i) => drawSparkline(i, p.salary_curve_5y, p.stddev_curve_5y));
+
+    renderComparePanel(top3);
+  }
+
+  // ── Compare panel: radar + table across the picked paths ──
+  const COMPARE_COLORS = ['#6366f1', '#2dd4bf', '#fbbf24', '#8b5cf6', '#f87171'];
+
+  const COMPARE_DIMS = [
+    { key: 'income',    label: 'Income (5y EV)', raw: p => p.ev_5y || 0,                    fmt: v => fmtMoney(v) },
+    { key: 'growth',    label: 'Growth',         raw: p => p.growth_rate || 0,              fmt: v => fmtPct(v) },
+    { key: 'safety',    label: 'Safety',         raw: p => 1 - (p.ruin_prob_5y || 0),       fmt: v => fmtPct(v) },
+    { key: 'balance',   label: 'Work-life balance', raw: p => p.wlb_score || 0,             fmt: v => fmtPct(v) },
+    { key: 'stamina',   label: 'Burnout-resistance', raw: p => 1 - (p.burnout_prob_5y || 0), fmt: v => fmtPct(v) },
+  ];
+
+  function normalize01(values) {
+    const finite = values.map(v => Number.isFinite(v) ? v : 0);
+    const min = Math.min(...finite);
+    const max = Math.max(...finite);
+    if (max === min) return finite.map(() => 0.5);
+    return finite.map(v => (v - min) / (max - min));
+  }
+
+  function renderComparePanel(top3) {
+    const panel = document.getElementById('compare-panel');
+    if (!panel) return;
+    if (!Array.isArray(top3) || top3.length < 2) {
+      panel.hidden = true;
+      panel.innerHTML = '';
+      return;
+    }
+    panel.hidden = false;
+
+    const legendHtml = top3.map((p, i) => `
+      <span class="item">
+        <span class="swatch" style="background:${COMPARE_COLORS[i % COMPARE_COLORS.length]}"></span>
+        ${escapeHtml(p.title)} · ${(p.utility_score ?? 0).toFixed(2)}
+      </span>
+    `).join('');
+
+    const headerCells = top3.map((p, i) =>
+      `<th style="color:${COMPARE_COLORS[i % COMPARE_COLORS.length]}">${escapeHtml(p.title)}</th>`
+    ).join('');
+
+    const rows = COMPARE_DIMS.map(dim => {
+      const raws = top3.map(p => dim.raw(p));
+      const winIdx = raws.indexOf(Math.max(...raws));
+      const cells = raws.map((v, i) =>
+        `<td class="${i === winIdx ? 'win' : ''}">${escapeHtml(dim.fmt(v))}</td>`
+      ).join('');
+      return `<tr><td class="dim">${escapeHtml(dim.label)}</td>${cells}</tr>`;
+    }).join('');
+
+    panel.innerHTML = `
+      <h3>Compare across dimensions</h3>
+      <div class="compare-legend">${legendHtml}</div>
+      <div class="compare-radar"><canvas id="compare-radar"></canvas></div>
+      <table class="compare-table">
+        <thead><tr><th>Dimension</th>${headerCells}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+
+    drawCompareRadar(top3);
+  }
+
+  function drawCompareRadar(top3) {
+    const ctx = document.getElementById('compare-radar');
+    if (!ctx) return;
+
+    const labels = COMPARE_DIMS.map(d => d.label);
+    const normByDim = COMPARE_DIMS.map(d => normalize01(top3.map(p => d.raw(p))));
+
+    const datasets = top3.map((p, i) => ({
+      label: p.title,
+      data: COMPARE_DIMS.map((_, dimIdx) => normByDim[dimIdx][i]),
+      borderColor: COMPARE_COLORS[i % COMPARE_COLORS.length],
+      backgroundColor: COMPARE_COLORS[i % COMPARE_COLORS.length] + '33',
+      borderWidth: 2,
+      pointRadius: 3,
+      pointBackgroundColor: COMPARE_COLORS[i % COMPARE_COLORS.length],
+    }));
+
+    const chart = new Chart(ctx, {
+      type: 'radar',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          r: {
+            min: 0, max: 1,
+            ticks: { display: false, stepSize: 0.25 },
+            grid:  { color: 'rgba(255,255,255,0.06)' },
+            angleLines: { color: 'rgba(255,255,255,0.08)' },
+            pointLabels: { color: 'rgba(160,168,190,0.95)', font: { size: 11 } },
+          },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const dim = COMPARE_DIMS[ctx.dataIndex];
+                const path = top3[ctx.datasetIndex];
+                return `${path.title}: ${dim.fmt(dim.raw(path))}`;
+              },
+            },
+          },
+        },
+      },
+    });
+    activeCharts.push(chart);
   }
 
   // ── Career advice (post-pick agent) ──
