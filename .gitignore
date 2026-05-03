@@ -211,3 +211,4 @@ credentials.json
 # But DO include flutter_demo/lib/ (override the root lib/ ignore)
 !**/flutter_demo/lib/
 !**/flutter_demo/lib/**
+.superpowers/
