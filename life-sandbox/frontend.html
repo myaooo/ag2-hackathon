@@ -24,6 +24,7 @@
       --text:    #f0f6fc;
       --muted:   #8b949e;
       --border:  rgba(255,255,255,0.07);
+      /* --bg1, --bg2, --teal, --green, --amber used in Tasks 3–9 */
     }
 
     html, body { height: 100%; overflow: hidden; font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); }
@@ -151,7 +152,7 @@
   function goTo(n, forward = true) {
     const prev = document.getElementById('s' + current);
     const next = document.getElementById('s' + n);
-    if (!next) return;
+    if (!next || !prev) return;
     prev.classList.remove('active');
     prev.classList.add(forward ? 'exit-up' : 'exit-dn');
     setTimeout(() => prev.classList.remove('exit-up', 'exit-dn'), 500);
