@@ -41,11 +41,12 @@ import asyncio
 import json
 import os
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from agents import (
     build_career_evaluator,
@@ -197,6 +198,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/")
+async def serve_frontend() -> FileResponse:
+    """Entry-page form. Submits to /simulate/stream and renders 3 ranked path cards."""
+    return FileResponse(Path(__file__).parent / "frontend.html")
 
 
 @app.get("/healthz")

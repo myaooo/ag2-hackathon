@@ -245,6 +245,7 @@ life-sandbox/
 ├── schemas.py          # All Pydantic models
 ├── agents.py           # 5 agent factories + provider/config selection
 ├── backend.py          # FastAPI app + orchestration pipeline + SSE endpoint
+├── frontend.html       # Self-contained entry-page form (served at GET /)
 ├── README.md           # Run instructions + full API contract
 └── DESIGN.md           # ← this file
 ```

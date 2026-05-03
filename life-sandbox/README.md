@@ -42,7 +42,17 @@ python backend.py
 
 ## API
 
-The backend exposes a typed JSON API. See `/docs` for the live OpenAPI UI.
+The backend exposes a typed JSON API plus a self-contained entry-page UI.
+See `/docs` for the live OpenAPI UI.
+
+### `GET /`
+
+Serves `frontend.html` — a single-page entry form (stage, field, location,
+risk-tolerance / ambition sliders, notes) that submits to
+`POST /simulate/stream` and renders the 3 ranked path cards live with
+Chart.js salary curves and stddev bands. Useful for demos and quick manual
+testing; the dedicated frontend (separate repo / branch) can ignore this
+endpoint.
 
 ### `POST /simulate`
 

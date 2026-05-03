@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Life Sandbox — AG2 Beta</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --bg-0: #0b0d12;
+        --bg-1: #14171f;
+        --bg-2: #1c2030;
+        --border: #2a2f42;
+        --border-strong: #3d4360;
+        --text-primary: #f1f3f8;
+        --text-secondary: #a0a8be;
+        --text-muted: #6e7693;
+        --accent: #6366f1;
+        --accent-hover: #7c7ff5;
+        --accent-glow: rgba(99, 102, 241, 0.25);
+        --good: #34d399;
+        --warn: #fbbf24;
+        --bad: #f87171;
+        --chip-bg: rgba(99, 102, 241, 0.12);
+      }
+
+      html, body { height: 100%; }
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        color: var(--text-primary);
+        background:
+          radial-gradient(ellipse 80% 60% at 50% -20%, rgba(99, 102, 241, 0.18), transparent 60%),
+          var(--bg-0);
+        min-height: 100vh;
+        line-height: 1.5;
+      }
+
+      header {
+        padding: 36px 32px 28px;
+        max-width: 1280px;
+        margin: 0 auto;
+      }
+      header .brand {
+        display: flex; align-items: baseline; gap: 12px;
+        font-weight: 800; font-size: 24px; letter-spacing: -0.02em;
+      }
+      header .brand .dot {
+        display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+        background: var(--accent); box-shadow: 0 0 16px var(--accent-glow);
+      }
+      header .brand .badge {
+        font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+        text-transform: uppercase; color: var(--text-muted);
+        padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px;
+      }
+      header .tagline {
+        margin-top: 8px; color: var(--text-secondary); font-size: 15px;
+        max-width: 720px;
+      }
+
+      main {
+        max-width: 1280px; margin: 0 auto;
+        padding: 8px 32px 64px;
+        display: grid;
+        grid-template-columns: minmax(360px, 420px) 1fr;
+        gap: 28px;
+      }
+      @media (max-width: 900px) {
+        main { grid-template-columns: 1fr; }
+      }
+
+      .panel {
+        background: var(--bg-1);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 24px;
+      }
+
+      /* ============== Form ============== */
+      .form-panel h2 {
+        font-size: 13px; font-weight: 700; letter-spacing: 0.08em;
+        text-transform: uppercase; color: var(--text-muted);
+        margin-bottom: 18px;
+      }
+      .field { margin-bottom: 18px; }
+      .field label {
+        display: block; font-size: 13px; font-weight: 600;
+        color: var(--text-secondary); margin-bottom: 6px;
+      }
+      .field input[type="text"],
+      .field select,
+      .field textarea {
+        width: 100%;
+        background: var(--bg-2);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-family: inherit; font-size: 14px;
+        outline: none;
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+      .field input[type="text"]:focus,
+      .field select:focus,
+      .field textarea:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-glow);
+      }
+      .field textarea { resize: vertical; min-height: 64px; }
+
+      .slider-field { margin-bottom: 18px; }
+      .slider-row {
+        display: flex; align-items: center; gap: 12px;
+      }
+      .slider-row input[type="range"] {
+        flex: 1; accent-color: var(--accent); height: 4px;
+      }
+      .slider-row .value {
+        font-variant-numeric: tabular-nums; font-weight: 600;
+        font-size: 13px; color: var(--text-primary); min-width: 32px;
+        text-align: right;
+      }
+      .slider-hint {
+        display: flex; justify-content: space-between;
+        font-size: 11px; color: var(--text-muted); margin-top: 4px;
+      }
+
+      button.submit {
+        width: 100%;
+        background: var(--accent);
+        color: white;
+        font-family: inherit; font-size: 14px; font-weight: 600;
+        padding: 12px 16px;
+        border: none; border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.15s, transform 0.1s;
+        margin-top: 8px;
+      }
+      button.submit:hover:not(:disabled) {
+        background: var(--accent-hover);
+      }
+      button.submit:active:not(:disabled) { transform: translateY(1px); }
+      button.submit:disabled {
+        background: var(--bg-2); color: var(--text-muted); cursor: not-allowed;
+      }
+
+      /* ============== Right pane ============== */
+      .results-panel { min-height: 480px; }
+      .results-panel.empty {
+        display: flex; align-items: center; justify-content: center;
+        color: var(--text-muted); font-size: 14px;
+        text-align: center; padding: 48px;
+      }
+      .results-panel.empty .empty-icon {
+        font-size: 36px; margin-bottom: 12px; opacity: 0.4;
+      }
+
+      /* ============== Progress ============== */
+      .progress { margin-bottom: 20px; }
+      .progress h3 {
+        font-size: 13px; font-weight: 700; letter-spacing: 0.08em;
+        text-transform: uppercase; color: var(--text-muted);
+        margin-bottom: 12px;
+      }
+      .step {
+        display: flex; align-items: center; gap: 10px;
+        padding: 8px 0; font-size: 13px;
+        color: var(--text-muted);
+        transition: color 0.2s;
+      }
+      .step.active { color: var(--text-primary); }
+      .step.done { color: var(--good); }
+      .step.error { color: var(--bad); }
+      .step .indicator {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 18px; height: 18px; border-radius: 50%;
+        border: 1.5px solid currentColor; font-size: 11px; font-weight: 600;
+        flex-shrink: 0;
+      }
+      .step.active .indicator {
+        background: var(--accent); border-color: var(--accent); color: white;
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      .step.done .indicator { background: var(--good); border-color: var(--good); color: var(--bg-0); }
+      .step.error .indicator { background: var(--bad); border-color: var(--bad); color: white; }
+      @keyframes pulse {
+        0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
+        50%      { box-shadow: 0 0 0 6px transparent; }
+      }
+
+      /* ============== Cards ============== */
+      .cards { display: flex; flex-direction: column; gap: 16px; }
+      .card {
+        background: var(--bg-1);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 20px;
+        transition: border-color 0.2s, transform 0.2s;
+      }
+      .card.rank-1 { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-glow); }
+      .card-header {
+        display: flex; align-items: flex-start; justify-content: space-between;
+        gap: 12px; margin-bottom: 12px;
+      }
+      .card-title { font-size: 17px; font-weight: 700; }
+      .card-archetype {
+        font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+        text-transform: uppercase; color: var(--text-muted);
+        margin-top: 2px;
+      }
+      .card-rank {
+        display: inline-flex; align-items: center;
+        background: var(--chip-bg); color: var(--accent);
+        border-radius: 999px; padding: 4px 10px;
+        font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+      }
+      .card .summary {
+        color: var(--text-secondary); font-size: 13px;
+        margin-bottom: 14px;
+      }
+      .chart-wrap { height: 100px; margin-bottom: 14px; }
+      .chips {
+        display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px;
+      }
+      .chip {
+        font-size: 11px; font-weight: 600;
+        padding: 4px 10px; border-radius: 999px;
+        background: var(--bg-2); color: var(--text-secondary);
+        border: 1px solid var(--border);
+      }
+      .chip.good { color: var(--good); border-color: rgba(52, 211, 153, 0.3); }
+      .chip.warn { color: var(--warn); border-color: rgba(251, 191, 36, 0.3); }
+      .chip.bad  { color: var(--bad);  border-color: rgba(248, 113, 113, 0.3); }
+      .why-block { margin-bottom: 8px; }
+      .why-block .label {
+        font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+        text-transform: uppercase; color: var(--text-muted);
+        margin-bottom: 3px;
+      }
+      .why-block .text { font-size: 13px; color: var(--text-primary); }
+
+      .error-banner {
+        background: rgba(248, 113, 113, 0.1);
+        color: var(--bad);
+        border: 1px solid rgba(248, 113, 113, 0.3);
+        padding: 12px 14px;
+        border-radius: 8px;
+        font-size: 13px;
+        margin-top: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <span class="dot"></span>
+        Life Sandbox
+        <span class="badge">AG2 Beta · Multi-Agent</span>
+      </div>
+      <div class="tagline">
+        Tell us about yourself. Five specialist agents will propose three
+        career paths and rank them for <em>your</em> risk tolerance and
+        ambition.
+      </div>
+    </header>
+
+    <main>
+      <!-- ======================= FORM ======================= -->
+      <section class="panel form-panel">
+        <h2>Your profile</h2>
+        <form id="profile-form">
+          <div class="field">
+            <label for="stage">Where are you?</label>
+            <select id="stage" name="stage" required>
+              <option value="high_school">High school student</option>
+              <option value="undergrad" selected>Undergrad</option>
+              <option value="new_grad">Recent graduate</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="field">Field / major</label>
+            <input
+              type="text" id="field" name="field" required
+              placeholder="e.g. Computer Science"
+              value="Computer Science"
+            />
+          </div>
+
+          <div class="field">
+            <label for="location">Preferred location</label>
+            <input
+              type="text" id="location" name="location" required
+              placeholder="e.g. NYC, San Francisco, Remote"
+              value="NYC"
+            />
+          </div>
+
+          <div class="slider-field">
+            <label for="risk_tolerance">
+              Risk tolerance · <span id="risk_tolerance_val">0.40</span>
+            </label>
+            <div class="slider-row">
+              <input type="range" id="risk_tolerance" name="risk_tolerance"
+                     min="0" max="1" step="0.05" value="0.4" />
+            </div>
+            <div class="slider-hint">
+              <span>Avoid volatility</span><span>Embrace volatility</span>
+            </div>
+          </div>
+
+          <div class="slider-field">
+            <label for="ambition">
+              Ambition · <span id="ambition_val">0.70</span>
+            </label>
+            <div class="slider-row">
+              <input type="range" id="ambition" name="ambition"
+                     min="0" max="1" step="0.05" value="0.7" />
+            </div>
+            <div class="slider-hint">
+              <span>Stable plateau</span><span>Optimize for growth</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="notes">Anything else? (optional)</label>
+            <textarea id="notes" name="notes" rows="3"
+              placeholder="Goals, constraints, things you care about..."></textarea>
+          </div>
+
+          <button type="submit" class="submit" id="submit-btn">
+            Explore my paths
+          </button>
+        </form>
+      </section>
+
+      <!-- ====================== RESULTS ====================== -->
+      <section class="panel results-panel empty" id="results">
+        <div>
+          <div class="empty-icon">🧭</div>
+          <div>Fill in your profile and the agents will get to work.</div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      // ---- Slider live values ----
+      for (const id of ['risk_tolerance', 'ambition']) {
+        const slider = document.getElementById(id);
+        const display = document.getElementById(id + '_val');
+        slider.addEventListener('input', () => {
+          display.textContent = parseFloat(slider.value).toFixed(2);
+        });
+      }
+
+      // ---- Pipeline stages displayed in the progress UI ----
+      const STAGES = [
+        { id: 'candidates', label: 'Generating 3 candidate paths' },
+        { id: 'career',     label: 'Career trajectory analysis' },
+        { id: 'finance',    label: 'Compensation modeling' },
+        { id: 'risk',       label: 'Risk and downside analysis' },
+        { id: 'decision',   label: 'Ranking by your utility' },
+      ];
+
+      const $ = (sel, root = document) => root.querySelector(sel);
+      const charts = [];
+
+      function fmtMoney(n) {
+        if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M';
+        if (n >= 1_000)     return '$' + Math.round(n / 1_000) + 'k';
+        return '$' + Math.round(n);
+      }
+      function fmtPct(p) { return Math.round(p * 100) + '%'; }
+
+      function renderProgress() {
+        const stepsHtml = STAGES.map(s => `
+          <div class="step" data-stage="${s.id}">
+            <span class="indicator">·</span>
+            <span class="label">${s.label}</span>
+          </div>
+        `).join('');
+        return `
+          <div class="progress">
+            <h3>Pipeline</h3>
+            ${stepsHtml}
+          </div>
+        `;
+      }
+
+      function setStage(stageId, status, extra = '') {
+        const el = document.querySelector(`[data-stage="${stageId}"]`);
+        if (!el) return;
+        el.classList.remove('active', 'done', 'error');
+        el.classList.add(status);
+        const indicator = el.querySelector('.indicator');
+        if (status === 'done')   indicator.textContent = '✓';
+        else if (status === 'error')  indicator.textContent = '!';
+        else if (status === 'active') indicator.textContent = '…';
+        else indicator.textContent = '·';
+        if (extra) el.querySelector('.label').textContent = extra;
+      }
+
+      function chipClassForRuin(p) {
+        if (p < 0.10) return 'good';
+        if (p < 0.30) return 'warn';
+        return 'bad';
+      }
+
+      function renderCards(top3) {
+        // Destroy any existing charts to avoid leaks on re-runs
+        for (const c of charts) c.destroy();
+        charts.length = 0;
+
+        const html = top3.map((p, idx) => `
+          <article class="card ${idx === 0 ? 'rank-1' : ''}" data-path="${p.path_id}">
+            <div class="card-header">
+              <div>
+                <div class="card-title">${escapeHtml(p.title)}</div>
+                <div class="card-archetype">${escapeHtml(p.archetype)}</div>
+              </div>
+              <span class="card-rank">#${idx + 1} · ${(p.utility_score ?? 0).toFixed(2)}</span>
+            </div>
+            <div class="summary">${escapeHtml(p.summary)}</div>
+            <div class="chart-wrap"><canvas id="chart-${idx}"></canvas></div>
+            <div class="chips">
+              <span class="chip good">EV ${fmtMoney(p.ev_5y)}</span>
+              <span class="chip ${chipClassForRuin(p.ruin_prob_5y)}">Ruin ${fmtPct(p.ruin_prob_5y)}</span>
+              <span class="chip">Growth ${fmtPct(p.growth_rate)}</span>
+            </div>
+            <div class="why-block">
+              <div class="label">Why it fits you</div>
+              <div class="text">${escapeHtml(p.why)}</div>
+            </div>
+            <div class="why-block">
+              <div class="label">Trade-offs</div>
+              <div class="text">${escapeHtml(p.tradeoffs)}</div>
+            </div>
+          </article>
+        `).join('');
+        return `<div class="cards">${html}</div>`;
+      }
+
+      function drawChart(canvasId, mean, stddev) {
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+        const labels = mean.map((_, i) => `Y${i + 1}`);
+        const upper = mean.map((m, i) => m + (stddev[i] ?? 0));
+        const lower = mean.map((m, i) => Math.max(0, m - (stddev[i] ?? 0)));
+        const chart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: '+1σ',
+                data: upper,
+                borderWidth: 0,
+                pointRadius: 0,
+                fill: '+1',
+                backgroundColor: 'rgba(99, 102, 241, 0.15)',
+              },
+              {
+                label: '-1σ',
+                data: lower,
+                borderWidth: 0,
+                pointRadius: 0,
+                fill: false,
+              },
+              {
+                label: 'Mean',
+                data: mean,
+                borderColor: '#6366f1',
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: false,
+                tension: 0.3,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: {
+              callbacks: { label: c => c.dataset.label + ': ' + fmtMoney(c.parsed.y) }
+            }},
+            scales: {
+              x: { grid: { display: false }, ticks: { color: '#6e7693', font: { size: 10 } } },
+              y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: {
+                color: '#6e7693', font: { size: 10 },
+                callback: v => fmtMoney(v),
+              }},
+            },
+          },
+        });
+        charts.push(chart);
+      }
+
+      function escapeHtml(s) {
+        return String(s ?? '').replace(/[&<>"']/g, c => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+      }
+
+      // ---- Form submit ----
+      $('#profile-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const profile = {
+          stage:          $('#stage').value,
+          field:          $('#field').value.trim(),
+          location:       $('#location').value.trim(),
+          risk_tolerance: parseFloat($('#risk_tolerance').value),
+          ambition:       parseFloat($('#ambition').value),
+          notes:          $('#notes').value.trim(),
+        };
+
+        const btn = $('#submit-btn');
+        btn.disabled = true;
+        btn.textContent = 'Running…';
+
+        const results = $('#results');
+        results.classList.remove('empty');
+        results.innerHTML = renderProgress();
+        setStage('candidates', 'active');
+
+        let res;
+        try {
+          res = await fetch('/simulate/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(profile),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+          await consumeSSE(res);
+        } catch (err) {
+          showError(err.message || String(err));
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Explore my paths';
+        }
+      });
+
+      async function consumeSSE(res) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let evaluatorsStarted = false;
+        let lastDecision = null;
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          let sep;
+          while ((sep = buffer.indexOf('\n\n')) >= 0) {
+            const block = buffer.slice(0, sep);
+            buffer = buffer.slice(sep + 2);
+            const event = (block.match(/^event:\s*(.+)$/m) || [])[1];
+            const dataStr = (block.match(/^data:\s*(.+)$/m) || [])[1];
+            if (!event || !dataStr) continue;
+
+            let data;
+            try { data = JSON.parse(dataStr); } catch { continue; }
+
+            if (event === 'stage') {
+              if (data.stage === 'candidates') setStage('candidates', 'active');
+              if (data.stage === 'evaluating' && !evaluatorsStarted) {
+                evaluatorsStarted = true;
+                setStage('career', 'active');
+                setStage('finance', 'active');
+                setStage('risk', 'active');
+              }
+              if (data.stage === 'deciding') setStage('decision', 'active');
+            } else if (event === 'candidates') {
+              setStage('candidates', 'done',
+                       `Generated ${data.paths.length} candidate paths`);
+            } else if (event === 'career')  {
+              setStage('career',  'done', 'Career trajectory analysis · done');
+            } else if (event === 'finance') {
+              setStage('finance', 'done', 'Compensation modeling · done');
+            } else if (event === 'risk')    {
+              setStage('risk',    'done', 'Risk and downside analysis · done');
+            } else if (event === 'decision') {
+              setStage('decision', 'done', 'Ranked by your utility');
+              lastDecision = data;
+              const cardsHtml = renderCards(data.top3);
+              const progressHtml = $('#results').querySelector('.progress').outerHTML;
+              $('#results').innerHTML = progressHtml + cardsHtml;
+              data.top3.forEach((p, i) => drawChart(`chart-${i}`, p.salary_curve_5y, p.stddev_curve_5y));
+            } else if (event === 'error') {
+              showError(data.error);
+              return;
+            } else if (event === 'done') {
+              return;
+            }
+          }
+        }
+      }
+
+      function showError(msg) {
+        const div = document.createElement('div');
+        div.className = 'error-banner';
+        div.textContent = 'Error: ' + msg;
+        $('#results').appendChild(div);
+      }
+    </script>
+  </body>
+</html>
