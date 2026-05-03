@@ -88,7 +88,13 @@ def build_config() -> ModelConfig:
         )
 
     if provider == "openai":
-        return OpenAIConfig(model=model, streaming=True)
+        config = OpenAIConfig(
+            model=model,
+            streaming=True,
+            base_url="https://openrouter.ai/api/v1",
+            # max_completion_tokens=1024,
+        )
+        return config
     return GeminiConfig(model=model, streaming=True)
 
 
