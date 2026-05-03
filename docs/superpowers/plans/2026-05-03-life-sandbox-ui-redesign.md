@@ -1,0 +1,1511 @@
+# Life Sandbox UI Redesign Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Rewrite `life-sandbox/frontend.html` into a cinematic, RPG-style multi-screen experience with a walking character companion, LinkedIn-first onboarding, step-by-step profile collection, live agent simulation view, and animated results.
+
+**Architecture:** Single self-contained `frontend.html` (no build step, no npm). Nine JS-driven screens share one DOM; `goTo(n, forward)` swaps visibility with fade+slide transitions. A persistent walking figure moves along a road SVG at the bottom as the user progresses. SSE integration reuses the existing `/simulate/stream` endpoint contract unchanged.
+
+**Tech Stack:** Vanilla HTML/CSS/JS, Google Fonts (Inter), Chart.js 4.4.1 (CDN, already used), FastAPI SSE backend (unchanged)
+
+---
+
+## File map
+
+| File | Action | Responsibility |
+|------|--------|----------------|
+| `life-sandbox/frontend.html` | **Rewrite** | All UI — screens, animations, SSE wiring |
+| `life-sandbox/backend.py` | No change | SSE endpoint unchanged |
+| `life-sandbox/schemas.py` | No change | Data shapes unchanged |
+| `.gitignore` | Append | Ignore `.superpowers/` brainstorm files |
+
+---
+
+## SSE event contract (from backend.py — do not change)
+
+```
+event: stage      data: {"stage": "candidates"}
+event: candidates data: {paths: [{id, title, archetype, summary}, ...]}
+event: stage      data: {"stage": "evaluating"}
+event: career     data: CareerOutput
+event: finance    data: FinanceOutput
+event: risk       data: RiskOutput
+event: stage      data: {"stage": "deciding"}
+event: decision   data: {top3: [RankedPath, ...]}   ← render results from this
+event: done       data: {"ok": true}
+event: error      data: {"error": "<message>"}
+```
+
+`RankedPath` fields used by UI: `title`, `archetype`, `utility_score`, `why`, `tradeoffs`, `salary_curve_5y`, `stddev_curve_5y`, `ev_5y`, `ruin_prob_5y`, `growth_rate`
+
+---
+
+## Task 1: App shell — HTML skeleton, CSS system, screen manager
+
+**Files:**
+- Rewrite: `life-sandbox/frontend.html`
+
+- [ ] **Step 1: Write the new frontend.html with full shell**
+
+Replace the entire contents of `life-sandbox/frontend.html` with:
+
+```html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Life Sandbox — AG2 Beta</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #07090f;
+      --bg1:     #0d1117;
+      --bg2:     #161b27;
+      --indigo:  #6366f1;
+      --purple:  #8b5cf6;
+      --teal:    #2dd4bf;
+      --green:   #4ade80;
+      --amber:   #fbbf24;
+      --red:     #f87171;
+      --text:    #f0f6fc;
+      --muted:   #8b949e;
+      --border:  rgba(255,255,255,0.07);
+    }
+
+    html, body { height: 100%; overflow: hidden; font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+
+    #app { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+
+    /* ── Background ── */
+    .bg-layer {
+      position: absolute; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(99,102,241,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 30% at 90% 80%,  rgba(139,92,246,0.10) 0%, transparent 50%),
+        var(--bg);
+    }
+    .stars { position: absolute; inset: 0; pointer-events: none; }
+    .star {
+      position: absolute; border-radius: 50%; background: white;
+      animation: twinkle var(--d, 3s) ease-in-out infinite var(--delay, 0s);
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: var(--min, .1); }
+      50%       { opacity: var(--max, .6); }
+    }
+
+    /* ── Progress bar (top edge) ── */
+    #progress-bar {
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: rgba(255,255,255,0.04); z-index: 100;
+    }
+    #progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--indigo), var(--purple));
+      transition: width 0.6s ease;
+      width: 0%;
+    }
+
+    /* ── Screens ── */
+    .screen {
+      position: absolute; inset: 0;
+      padding: 40px 24px 130px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.45s ease, transform 0.45s ease;
+      transform: translateY(20px);
+    }
+    .screen.active  { opacity: 1; pointer-events: all; transform: translateY(0); }
+    .screen.exit-up { opacity: 0; transform: translateY(-24px); }
+    .screen.exit-dn { opacity: 0; transform: translateY(24px); }
+
+    /* ── Step navigation shared buttons ── */
+    .btn-back {
+      padding: 10px 20px; border-radius: 10px;
+      background: transparent; border: 1px solid rgba(255,255,255,0.1);
+      color: var(--muted); font-family: inherit; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-back:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+
+    .btn-next {
+      padding: 13px 30px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--indigo), var(--purple));
+      color: white; font-family: inherit; font-size: 15px; font-weight: 700;
+      border: none; cursor: pointer;
+      box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+      transition: opacity 0.15s, transform 0.1s;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .btn-next:hover  { opacity: 0.9; }
+    .btn-next:active { transform: scale(0.97); }
+
+    /* Step dots */
+    .step-dots { display: flex; gap: 5px; align-items: center; }
+    .sdot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      transition: all 0.3s;
+    }
+    .sdot.cur  { background: var(--indigo); width: 16px; border-radius: 3px; }
+    .sdot.done { background: rgba(99,102,241,0.5); }
+
+    /* Step shell */
+    .step-shell { width: 100%; max-width: 540px; }
+    .step-q    { font-size: clamp(22px,4vw,32px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; margin-bottom: 8px; }
+    .step-hint { font-size: 14px; color: var(--muted); margin-bottom: 32px; line-height: 1.5; }
+    .step-nav  { display: flex; align-items: center; justify-content: space-between; }
+
+    /* Error banner */
+    .error-banner {
+      background: rgba(248,113,113,0.1); color: var(--red);
+      border: 1px solid rgba(248,113,113,0.3);
+      padding: 12px 16px; border-radius: 10px;
+      font-size: 13px; margin-top: 16px; width: 100%;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="bg-layer"></div>
+  <div class="stars" id="stars"></div>
+  <div id="progress-bar"><div id="progress-fill"></div></div>
+
+  <!-- Screens inserted in Tasks 2-8 -->
+
+</div>
+<script>
+  // ── Starfield ──
+  (function() {
+    const el = document.getElementById('stars');
+    for (let i = 0; i < 80; i++) {
+      const s = document.createElement('div');
+      s.className = 'star';
+      const sz = Math.random() * 2 + 1;
+      s.style.cssText = `width:${sz}px;height:${sz}px;top:${Math.random()*100}%;left:${Math.random()*100}%;` +
+        `--d:${2+Math.random()*4}s;--delay:${-Math.random()*4}s;` +
+        `--min:${.05+Math.random()*.1};--max:${.3+Math.random()*.5}`;
+      el.appendChild(s);
+    }
+  })();
+
+  // ── Screen state ──
+  let current = 1;
+  const PROFILE_STEPS = 6; // screens 2–7
+
+  function goTo(n, forward = true) {
+    const prev = document.getElementById('s' + current);
+    const next = document.getElementById('s' + n);
+    if (!next) return;
+    prev.classList.remove('active');
+    prev.classList.add(forward ? 'exit-up' : 'exit-dn');
+    setTimeout(() => prev.classList.remove('exit-up', 'exit-dn'), 500);
+    next.classList.add('active');
+    current = n;
+    // Progress bar: 0% on landing, fills across steps 2–7, full on sim
+    const pct = n <= 1 ? 0 : n >= 8 ? 100 : Math.round(((n - 1) / PROFILE_STEPS) * 100);
+    document.getElementById('progress-fill').style.width = pct + '%';
+    updateWalker(n);
+    if (n >= 2 && n <= 7) renderDots(n);
+  }
+
+  function advance(n) { goTo(n, true);  }
+  function retreat(n) { goTo(n, false); }
+
+  function renderDots(screenNum) {
+    const el = document.getElementById('dots-s' + screenNum);
+    if (!el) return;
+    el.innerHTML = '';
+    for (let i = 1; i <= PROFILE_STEPS; i++) {
+      const d = document.createElement('div');
+      const step = screenNum - 1; // screen 2 = step 1, screen 7 = step 6
+      d.className = 'sdot' + (i === step ? ' cur' : i < step ? ' done' : '');
+      el.appendChild(d);
+    }
+  }
+
+  // Placeholder — implemented in Task 3
+  function updateWalker(n) {}
+</script>
+</body>
+</html>
+```
+
+- [ ] **Step 2: Open in browser and verify**
+
+Start the backend (if not running): `cd life-sandbox && uv run python backend.py`
+Then open: `http://localhost:8765`
+Expected: Black page, no errors in console, stars visible.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add life-sandbox/frontend.html
+git commit -m "feat: new frontend shell — screen system, CSS vars, starfield"
+```
+
+---
+
+## Task 2: Orbital rings (landing page background animation)
+
+**Files:**
+- Modify: `life-sandbox/frontend.html`
+
+- [ ] **Step 1: Add orbital rings CSS inside the `<style>` block** (after `.error-banner` rule)
+
+```css
+    /* ── Orbital rings (landing only) ── */
+    .orbits {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      transition: opacity 0.8s ease;
+    }
+    .orbit {
+      position: absolute; border-radius: 50%; border: 1px solid;
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+    }
+    .o1 { width: 320px; height: 320px; border-color: rgba(99,102,241,0.12); animation: orb 18s linear infinite; }
+    .o2 { width: 500px; height: 500px; border-color: rgba(99,102,241,0.07); animation: orb 30s linear infinite reverse; }
+    .o3 { width: 700px; height: 700px; border-color: rgba(139,92,246,0.05); animation: orb 45s linear infinite; }
+    @keyframes orb {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to   { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    .odot {
+      position: absolute; width: 7px; height: 7px; border-radius: 50%;
+      top: -3px; left: 50%; transform: translateX(-50%);
+    }
+    .odot1 { background: var(--indigo); box-shadow: 0 0 14px rgba(99,102,241,0.9); }
+    .odot2 { background: var(--purple); box-shadow: 0 0 10px rgba(139,92,246,0.8); }
+    .odot3 { background: var(--teal);   box-shadow: 0 0 8px  rgba(45,212,191,0.7); }
+```
+
+- [ ] **Step 2: Add orbits HTML** — inside `#app`, after `#progress-bar`
+
+```html
+  <div class="orbits" id="orbits">
+    <div class="orbit o1"><div class="odot odot1"></div></div>
+    <div class="orbit o2"><div class="odot odot2"></div></div>
+    <div class="orbit o3"><div class="odot odot3"></div></div>
+  </div>
+```
+
+- [ ] **Step 3: Hide orbits on non-landing screens** — update `goTo()` in the `<script>`:
+
+Find `updateWalker(n);` in `goTo()` and add the line before it:
+
+```js
+    document.getElementById('orbits').style.opacity = (n === 1) ? '1' : '0';
+```
+
+- [ ] **Step 4: Verify in browser**
+
+Reload `http://localhost:8765`. Expected: three concentric rings slowly rotating with glowing dots.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add life-sandbox/frontend.html
+git commit -m "feat: orbital ring animation on landing background"
+```
+
+---
+
+## Task 3: Walking path scene — road, walker, milestones, footprints
+
+**Files:**
+- Modify: `life-sandbox/frontend.html`
+
+- [ ] **Step 1: Add path scene CSS** (append inside `<style>`, after orbital ring rules)
+
+```css
+    /* ── Walking path scene ── */
+    #path-scene {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 110px; pointer-events: none; overflow: visible;
+    }
+    #path-road { position: absolute; bottom: 0; left: 0; width: 100%; height: 110px; }
+
+    #walker {
+      position: absolute; bottom: 46px;
+      transition: left 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      font-size: 28px; z-index: 20;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+    }
+    #walker-inner { display: inline-block; animation: walker-idle 2s ease-in-out infinite; }
+    @keyframes walker-walk {
+      0%   { transform: translateY(0)   rotate(-3deg); }
+      50%  { transform: translateY(-3px) rotate(3deg); }
+      100% { transform: translateY(0)   rotate(-3deg); }
+    }
+    @keyframes walker-idle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+    #walker.walking #walker-inner { animation: walker-walk 0.35s steps(2) infinite; }
+
+    .milestone {
+      position: absolute; bottom: 60px; font-size: 18px;
+      transition: opacity 0.4s, transform 0.4s;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+    }
+    .milestone.passed { opacity: 0.2; transform: scale(0.8); }
+
+    .footprint {
+      position: absolute; bottom: 44px;
+      font-size: 11px; opacity: 0;
+      animation: fp-fade 1.5s ease forwards;
+    }
+    @keyframes fp-fade { 0% { opacity: 0.5; } 100% { opacity: 0; } }
+
+    .sparkle {
+      position: absolute; bottom: 62px; font-size: 20px;
+      animation: sparkle-pop 0.6s ease forwards; pointer-events: none;
+    }
+    @keyframes sparkle-pop {
+      0%   { transform: scale(0) translateY(0);   opacity: 1; }
+      100% { transform: scale(1.4) translateY(-28px); opacity: 0; }
+    }
+
+    /* Companion bubble */
+    #companion {
+      position: absolute; bottom: 82px; z-index: 50;
+      pointer-events: none;
+      transition: left 0.8s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+    }
+    .comp-bubble {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 10px 10px 10px 2px;
+      padding: 8px 12px; font-size: 11px; color: var(--muted);
+      max-width: 200px; line-height: 1.5; white-space: nowrap;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      animation: bubble-in 0.4s ease forwards;
+    }
+    @keyframes bubble-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+```
+
+- [ ] **Step 2: Add path scene HTML** — inside `#app`, after the orbits div
+
+```html
+  <!-- Walking path -->
+  <div id="path-scene">
+    <svg id="path-road" viewBox="0 0 1440 110" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="72" width="1440" height="38" fill="#0d1117"/>
+      <rect x="0" y="76" width="1440" height="28" fill="#131928"/>
+      <line x1="0" y1="76" x2="1440" y2="76" stroke="rgba(99,102,241,0.2)" stroke-width="1"/>
+      <line x1="0" y1="90" x2="1440" y2="90" stroke="rgba(255,255,255,0.06)" stroke-width="1.5" stroke-dasharray="24 16"/>
+      <defs>
+        <linearGradient id="gGround" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+          <stop offset="0" stop-color="#07090f"/>
+          <stop offset="1" stop-color="#0d1117"/>
+        </linearGradient>
+      </defs>
+      <rect x="0" y="68" width="1440" height="8" fill="url(#gGround)"/>
+    </svg>
+
+    <!-- Milestone emoji flags, one per step -->
+    <div class="milestone" id="m2"  style="left:18%">🎓</div>
+    <div class="milestone" id="m3"  style="left:30%">🤔</div>
+    <div class="milestone" id="m4"  style="left:42%">✈️</div>
+    <div class="milestone" id="m5"  style="left:55%">🎲</div>
+    <div class="milestone" id="m6"  style="left:68%">🔥</div>
+    <div class="milestone" id="m7"  style="left:80%">💬</div>
+    <div class="milestone" id="m8"  style="left:90%">🌟</div>
+
+    <!-- Walker character -->
+    <div id="walker" style="left:8%"><div id="walker-inner">🧑‍💻</div></div>
+  </div>
+
+  <!-- Companion speech bubble -->
+  <div id="companion" style="left:8%">
+    <div class="comp-bubble" id="comp-bubble">Ready to find your path?</div>
+  </div>
+```
+
+- [ ] **Step 3: Replace the `updateWalker` stub in `<script>`** with the full implementation
+
+```js
+  const WALKER_POSITIONS = {
+    1: '8%',  2: '18%', 3: '30%', 4: '42%',
+    5: '55%', 6: '68%', 7: '80%', 8: '90%', 9: '94%',
+  };
+  const WALKER_EMOJI = {
+    1:'🧑‍💻', 2:'🧑‍🎓', 3:'🤔', 4:'✈️',
+    5:'🎲',  6:'🔥',  7:'💬', 8:'🔮', 9:'🎉',
+  };
+  const BUBBLE_MSG = {
+    1: 'Ready to find your path?',
+    2: 'Where are you starting from?',
+    3: 'What lights you up?',
+    4: 'Where do you see yourself?',
+    5: 'How do you handle uncertainty?',
+    6: 'How hungry are you for growth?',
+    7: "Anything else? I'm all ears.",
+    8: 'The agents are crunching your data…',
+    9: 'Here are your futures — choose wisely!',
+  };
+  const MILESTONE_IDS = { 2:'m2', 3:'m3', 4:'m4', 5:'m5', 6:'m6', 7:'m7', 8:'m8' };
+
+  function updateWalker(n) {
+    const pct  = WALKER_POSITIONS[n] || '8%';
+    const walker = document.getElementById('walker');
+    const inner  = document.getElementById('walker-inner');
+    const comp   = document.getElementById('companion');
+    const bubble = document.getElementById('comp-bubble');
+
+    // Footprint at current position before moving
+    spawnFootprint(walker.style.left || '8%');
+
+    // Start walking
+    walker.classList.add('walking');
+    inner.textContent = WALKER_EMOJI[n] || '🧑‍💻';
+    walker.style.left = pct;
+    comp.style.left   = pct;
+
+    // Stop walking after transition
+    setTimeout(() => walker.classList.remove('walking'), 900);
+
+    // Sparkle at destination
+    setTimeout(() => spawnSparkle(pct), 800);
+
+    // Milestone flags
+    Object.entries(MILESTONE_IDS).forEach(([screen, id]) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.toggle('passed', parseInt(screen) < n);
+    });
+
+    // Bubble
+    bubble.style.animation = 'none';
+    bubble.offsetHeight; // reflow
+    bubble.style.animation = 'bubble-in 0.4s ease forwards';
+    bubble.textContent = BUBBLE_MSG[n] || '';
+  }
+
+  function spawnFootprint(leftPct) {
+    const scene = document.getElementById('path-scene');
+    const fp = document.createElement('div');
+    fp.className = 'footprint';
+    fp.style.left = leftPct;
+    fp.textContent = '👣';
+    scene.appendChild(fp);
+    setTimeout(() => fp.remove(), 1600);
+  }
+
+  function spawnSparkle(leftPct) {
+    const scene = document.getElementById('path-scene');
+    const sp = document.createElement('div');
+    sp.className = 'sparkle';
+    sp.style.left = leftPct;
+    sp.textContent = '✨';
+    scene.appendChild(sp);
+    setTimeout(() => sp.remove(), 700);
+  }
+```
+
+- [ ] **Step 4: Verify in browser**
+
+Reload. Expected: road strip at bottom, walking figure at far left, speech bubble above it, milestone emoji flags along the road.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add life-sandbox/frontend.html
+git commit -m "feat: walking path scene — road, walker, milestones, footprints, sparkles"
+```
+
+---
+
+## Task 4: Screen 1 — Landing page
+
+**Files:**
+- Modify: `life-sandbox/frontend.html`
+
+- [ ] **Step 1: Add landing screen CSS** (append inside `<style>`)
+
+```css
+    /* ── Screen 1: Landing ── */
+    .s1-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px; border-radius: 999px;
+      background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.25);
+      font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+      color: #818cf8; margin-bottom: 24px;
+      animation: s1-fade 0.8s ease 0.2s both;
+    }
+    .s1-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--indigo); animation: bdot 2s ease infinite; }
+    @keyframes bdot    { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+    @keyframes s1-fade { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+    .s1-title {
+      font-size: clamp(38px, 7vw, 68px); font-weight: 900;
+      letter-spacing: -0.04em; line-height: 1.05; text-align: center;
+      margin-bottom: 14px;
+      background: linear-gradient(135deg, #fff 40%, rgba(129,140,248,0.85));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      animation: s1-fade 0.8s ease 0.4s both;
+    }
+    .s1-sub {
+      font-size: 15px; color: rgba(255,255,255,0.4); text-align: center;
+      max-width: 420px; line-height: 1.65; margin-bottom: 36px;
+      animation: s1-fade 0.8s ease 0.6s both;
+    }
+
+    /* LinkedIn input */
+    .li-wrap { width: 100%; max-width: 460px; animation: s1-fade 0.8s ease 0.8s both; }
+    .li-box {
+      display: flex; align-items: center;
+      background: rgba(255,255,255,0.04); border: 1.5px solid rgba(255,255,255,0.1);
+      border-radius: 14px; padding: 4px 4px 4px 16px; gap: 8px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .li-box:focus-within {
+      border-color: rgba(99,102,241,0.5);
+      box-shadow: 0 0 0 4px rgba(99,102,241,0.1);
+    }
+    .li-input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text); font-family: inherit; font-size: 14px; padding: 9px 0;
+    }
+    .li-input::placeholder { color: rgba(255,255,255,0.22); }
+    .li-go {
+      padding: 10px 18px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--indigo), var(--purple));
+      color: white; font-family: inherit; font-size: 13px; font-weight: 700;
+      border: none; cursor: pointer; flex-shrink: 0;
+      box-shadow: 0 4px 20px rgba(99,102,241,0.4);
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .li-go:hover  { opacity: 0.9; }
+    .li-go:active { transform: scale(0.97); }
+    .li-divider {
+      display: flex; align-items: center; gap: 12px;
+      color: rgba(255,255,255,0.18); font-size: 12px; margin: 12px 0;
+    }
+    .li-divider::before, .li-divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.06); }
+    .li-skip {
+      width: 100%; padding: 11px; border-radius: 12px;
+      background: transparent; border: 1px solid rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.32); font-family: inherit; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: border-color 0.15s, color 0.15s;
+    }
+    .li-skip:hover { border-color: rgba(255,255,255,0.18); color: rgba(255,255,255,0.6); }
+```
+
+- [ ] **Step 2: Add screen 1 HTML** — inside `#app`, before `</div>` (the closing tag of `#app`)
+
+```html
+  <!-- ══ Screen 1: Landing ══ -->
+  <div class="screen active" id="s1">
+    <div class="s1-badge"><div class="s1-badge-dot"></div>AG2 Multi-Agent · 5 specialists</div>
+    <div class="s1-title">Your life,<br/>your rules.</div>
+    <div class="s1-sub">Five AI agents simulate the next 5 years of your life across every path you could take.</div>
+    <div class="li-wrap">
+      <div class="li-box">
+        <span style="font-size:18px">🔗</span>
+        <input class="li-input" id="li-url" type="text" placeholder="Paste your LinkedIn URL to get started…"/>
+        <button class="li-go" id="li-import-btn">Import →</button>
+      </div>
+      <div class="li-divider">or start fresh</div>
+      <button class="li-skip" id="li-skip-btn">Fill in manually →</button>
+    </div>
+  </div>
+```
+
+- [ ] **Step 3: Wire landing buttons in `<script>`** (append before the closing `</script>`)
+
+```js
+  // Profile state — populated as user fills in steps
+  const profile = {
+    stage: 'undergrad',
+    field: '',
+    location: '',
+    risk_tolerance: 0.40,
+    ambition: 0.70,
+    notes: '',
+  };
+
+  document.getElementById('li-import-btn').addEventListener('click', () => {
+    const url = document.getElementById('li-url').value.trim();
+    if (!url) { document.getElementById('li-url').focus(); return; }
+    // URL stored but not parsed in MVP — skip to field step
+    profile.linkedinUrl = url;
+    advance(3);
+  });
+  document.getElementById('li-skip-btn').addEventListener('click', () => advance(2));
+```
+
+- [ ] **Step 4: Verify in browser**
+
+Reload. Expected: Hero text, LinkedIn input box, "or start fresh" divider, "Fill in manually" button. Clicking "Fill in manually" should do nothing yet (screen 2 not added). No console errors.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add life-sandbox/frontend.html
+git commit -m "feat: landing screen — hero, LinkedIn import input, skip to manual"
+```
+
+---
+
+## Task 5: Screens 2–4 — Stage, Field, Location
+
+**Files:**
+- Modify: `life-sandbox/frontend.html`
+
+- [ ] **Step 1: Add step screen shared + choice card CSS** (append inside `<style>`)
+
+```css
+    /* ── Step screens: choice cards ── */
+    .choices { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 32px; }
+    .choice {
+      padding: 12px 20px; border-radius: 12px; cursor: pointer;
+      background: rgba(255,255,255,0.03); border: 1.5px solid rgba(255,255,255,0.08);
+      font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.65);
+      transition: all 0.15s; display: flex; align-items: center; gap: 8px;
+    }
+    .choice:hover  { background: rgba(99,102,241,0.08); border-color: rgba(99,102,241,0.3); color: var(--text); }
+    .choice.active { background: rgba(99,102,241,0.14); border-color: var(--indigo); color: var(--text); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+    .choice-icon   { font-size: 18px; }
+
+    /* Text input */
+    .step-input {
+      width: 100%; background: rgba(255,255,255,0.04);
+      color: var(--text); border: 1.5px solid rgba(255,255,255,0.1);
+      border-radius: 12px; padding: 14px 18px;
+      font-family: inherit; font-size: 16px; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s; margin-bottom: 32px;
+    }
+    .step-input:focus { border-color: rgba(99,102,241,0.5); box-shadow: 0 0 0 4px rgba(99,102,241,0.08); }
+    .step-input::placeholder { color: rgba(255,255,255,0.2); }
+```
+
+- [ ] **Step 2: Add screens 2, 3, 4 HTML** (inside `#app`, after screen 1)
+
+```html
+  <!-- ══ Screen 2: Stage ══ -->
+  <div class="screen" id="s2">
+    <div class="step-shell">
+      <div class="step-q">Where are you in life right now?</div>
+      <div class="step-hint">This sets the baseline for your simulation.</div>
+      <div class="choices" id="stage-choices">
+        <div class="choice" data-val="high_school"><span class="choice-icon">🏫</span>High school</div>
+        <div class="choice active" data-val="undergrad"><span class="choice-icon">🎓</span>Undergrad</div>
+        <div class="choice" data-val="new_grad"><span class="choice-icon">💼</span>Recent grad</div>
+      </div>
+      <div class="step-nav">
+        <button class="btn-back" onclick="retreat(1)">← Back</button>
+        <div class="step-dots" id="dots-s2"></div>
+        <button class="btn-next" onclick="advance(3)">Continue →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Screen 3: Field ══ -->
+  <div class="screen" id="s3">
+    <div class="step-shell">
+      <div class="step-q">What's your field?</div>
+      <div class="step-hint">Your major or area of study.</div>
+      <input class="step-input" id="input-field" type="text" placeholder="e.g. Computer Science, Finance, Biology…"/>
+      <div class="step-nav">
+        <button class="btn-back" onclick="retreat(2)">← Back</button>
+        <div class="step-dots" id="dots-s3"></div>
+        <button class="btn-next" onclick="saveField()">Continue →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Screen 4: Location ══ -->
+  <div class="screen" id="s4">
+    <div class="step-shell">
+      <div class="step-q">Where do you want to be?</div>
+      <div class="step-hint">City, region, or remote — shapes compensation benchmarks.</div>
+      <input class="step-input" id="input-location" type="text" placeholder="e.g. San Francisco, NYC, Remote…"/>
+      <div class="step-nav">
+        <button class="btn-back" onclick="retreat(3)">← Back</button>
+        <div class="step-dots" id="dots-s4"></div>
+        <button class="btn-next" onclick="saveLocation()">Continue →</button>
+      </div>
+    </div>
+  </div>
+```
+
+- [ ] **Step 3: Add stage/field/location JS** (append in `<script>`)
+
+```js
+  // Stage choice cards
+  document.getElementById('stage-choices').addEventListener('click', e => {
+    const card = e.target.closest('.choice');
+    if (!card) return;
+    document.querySelectorAll('#stage-choices .choice').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+    profile.stage = card.dataset.val;
+  });
+
+  function saveField() {
+    const val = document.getElementById('input-field').value.trim();
+    if (!val) { document.getElementById('input-field').focus(); return; }
+    profile.field = val;
+    advance(4);
+  }
+
+  function saveLocation() {
+    const val = document.getElementById('input-location').value.trim();
+    if (!val) { document.getElementById('input-location').focus(); return; }
+    profile.location = val;
+    advance(5);
+  }
+```
+
+- [ ] **Step 4: Verify in browser**
+
+Click "Fill in manually →". Expected: walker moves to 18%, screen 2 shows stage cards with "Undergrad" pre-highlighted. Click a card, click Continue → walker moves to 30%, field input. Fill field, Continue → walker at 42%, location input. Check dots increment correctly.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add life-sandbox/frontend.html
+git commit -m "feat: profile steps 1-3 — stage choice cards, field and location inputs"
+```
+
+---
+
+## Task 6: Screens 5–7 — Risk, Ambition, Notes (slider steps)
+
+**Files:**
+- Modify: `life-sandbox/frontend.html`
+
+- [ ] **Step 1: Add slider CSS** (append inside `<style>`)
+
+```css
+    /* ── Slider steps ── */
+    .slider-section { margin-bottom: 32px; }
+    .slider-big-val {
+      font-size: clamp(48px, 8vw, 68px); font-weight: 900;
+      letter-spacing: -0.04em; color: #818cf8;
+      font-variant-numeric: tabular-nums; margin-bottom: 18px;
+      transition: color 0.2s;
+    }
+    input.range-slider {
+      width: 100%; appearance: none; height: 6px; border-radius: 999px;
+      background: linear-gradient(90deg, var(--indigo) var(--pct, 40%), rgba(255,255,255,0.08) var(--pct, 40%));
+      outline: none; cursor: pointer;
+    }
+    input.range-slider::-webkit-slider-thumb {
+      appearance: none; width: 26px; height: 26px; border-radius: 50%;
+      background: white; cursor: pointer;
+      box-shadow: 0 0 0 4px rgba(99,102,241,0.25), 0 2px 12px rgba(0,0,0,0.5);
+    }
+    .slider-labels {
+      display: flex; justify-content: space-between;
+      font-size: 12px; color: var(--muted); margin-top: 8px;
+    }
+
+    /* Textarea */
+    .step-textarea {
+      width: 100%; background: rgba(255,255,255,0.04);
+      color: var(--text); border: 1.5px solid rgba(255,255,255,0.1);
+      border-radius: 12px; padding: 14px 18px;
+      font-family: inherit; font-size: 15px; outline: none; resize: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      margin-bottom: 32px; min-height: 110px; line-height: 1.6;
+    }
+    .step-textarea:focus { border-color: rgba(99,102,241,0.5); box-shadow: 0 0 0 4px rgba(99,102,241,0.08); }
+    .step-textarea::placeholder { color: rgba(255,255,255,0.2); }
+```
+
+- [ ] **Step 2: Add screens 5, 6, 7 HTML** (inside `#app`, after screen 4)
+
+```html
+  <!-- ══ Screen 5: Risk tolerance ══ -->
+  <div class="screen" id="s5">
+    <div class="step-shell">
+      <div class="step-q">How much risk can you stomach?</div>
+      <div class="step-hint">Higher = you're OK with volatile, high-upside paths.</div>
+      <div class="slider-section">
+        <div class="slider-big-val" id="risk-display">0.40</div>
+        <input class="range-slider" id="risk-slider" type="range" min="0" max="1" step="0.05" value="0.4"/>
+        <div class="slider-labels"><span>🛡️ Play it safe</span><span>🔥 Bet on yourself</span></div>
+      </div>
+      <div class="step-nav">
+        <button class="btn-back" onclick="retreat(4)">← Back</button>
+        <div class="step-dots" id="dots-s5"></div>
+        <button class="btn-next" onclick="advance(6)">Continue →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Screen 6: Ambition ══ -->
+  <div class="screen" id="s6">
+    <div class="step-shell">
+      <div class="step-q">How hard do you want to push?</div>
+      <div class="step-hint">Higher ambition unlocks more demanding, higher-ceiling paths.</div>
+      <div class="slider-section">
+        <div class="slider-big-val" id="amb-display">0.70</div>
+        <input class="range-slider" id="amb-slider" type="range" min="0" max="1" step="0.05" value="0.7"/>
+        <div class="slider-labels"><span>🌿 Stable plateau</span><span>🚀 Optimize for growth</span></div>
+      </div>
+      <div class="step-nav">
+        <button class="btn-back" onclick="retreat(5)">← Back</button>
+        <div class="step-dots" id="dots-s6"></div>
+        <button class="btn-next" onclick="advance(7)">Continue →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Screen 7: Notes ══ -->
+  <div class="screen" id="s7">
+    <div class="step-shell">
+      <div class="step-q">Anything else to know?</div>
+      <div class="step-hint">Goals, constraints, things you care about. The agents will read this.</div>
+      <textarea class="step-textarea" id="input-notes"
+        placeholder="e.g. I want to stay in NYC. I care more about impact than money. I don't want to do finance…"></textarea>
+      <div class="step-nav">
+        <button class="btn-back" onclick="retreat(6)">← Back</button>
+        <div class="step-dots" id="dots-s7"></div>
+        <button class="btn-next" onclick="startSimulation()">Simulate my life 🚀</button>
+      </div>
+    </div>
+  </div>
+```
+
+- [ ] **Step 3: Add slider JS** (append in `<script>`)
+
+```js
+  function initSlider(sliderId, displayId, profileKey) {
+    const slider  = document.getElementById(sliderId);
+    const display = document.getElementById(displayId);
+    function sync() {
+      const val = parseFloat(slider.value);
+      const pct = (val * 100).toFixed(0) + '%';
+      display.textContent = val.toFixed(2);
+      slider.style.setProperty('--pct', pct);
+      // Shift display color: indigo (safe/low) → orange (risky/high)
+      const hue = Math.round(val * 60); // 0→220 indigo, 1→280 purple-warm
+      display.style.color = `hsl(${220 + hue}, 65%, 68%)`;
+      profile[profileKey] = val;
+    }
+    slider.addEventListener('input', sync);
+    sync(); // init
+  }
+  initSlider('risk-slider', 'risk-display', 'risk_tolerance');
+  initSlider('amb-slider',  'amb-display',  'ambition');
+
+  function startSimulation() {
+    profile.notes = document.getElementById('input-notes').value.trim();
+    advance(8);
+    runSSE();
+  }
+```
+
+- [ ] **Step 4: Verify in browser**
+
+Walk through steps 5 and 6. Expected: large value display updates as slider moves, color shifts. Step 7 shows textarea. "Simulate my life 🚀" should advance to screen 8 (which doesn't exist yet — that's OK, `goTo` will silently fail on missing element).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add life-sandbox/frontend.html
+git commit -m "feat: profile steps 4-6 — risk/ambition sliders and notes textarea"
+```
+
+---
+
+## Task 7: Screen 8 — Simulation view (agent pipeline UI)
+
+**Files:**
+- Modify: `life-sandbox/frontend.html`
+
+- [ ] **Step 1: Add simulation screen CSS** (append inside `<style>`)
+
+```css
+    /* ── Screen 8: Simulation ── */
+    .sim-wrap { width: 100%; max-width: 580px; }
+    .sim-title { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 6px; }
+    .sim-sub   { font-size: 14px; color: var(--muted); margin-bottom: 28px; }
+
+    .agents { display: flex; flex-direction: column; gap: 9px; }
+    .agent {
+      display: flex; align-items: center; gap: 14px;
+      padding: 12px 16px; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.02);
+      transition: border-color 0.4s, background 0.4s;
+    }
+    .agent.running { border-color: rgba(99,102,241,0.35);  background: rgba(99,102,241,0.06); }
+    .agent.done    { border-color: rgba(74,222,128,0.3);   background: rgba(74,222,128,0.04); }
+    .agent.error   { border-color: rgba(248,113,113,0.3);  background: rgba(248,113,113,0.04); }
+
+    .agent-icon { font-size: 18px; width: 28px; text-align: center; flex-shrink: 0; }
+    .agent-name { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+    .agent-status { font-size: 11px; color: var(--muted); transition: color 0.3s; }
+    .agent.running .agent-status { color: #818cf8; }
+    .agent.done    .agent-status { color: var(--green); }
+    .agent.error   .agent-status { color: var(--red); }
+
+    .agent-chip {
+      font-size: 10px; font-weight: 700; padding: 3px 8px;
+      border-radius: 999px; margin-left: auto; flex-shrink: 0;
+    }
+    .chip-run  { background: rgba(99,102,241,0.12);  color: #818cf8; animation: chip-blink 1.2s ease infinite; }
+    .chip-done { background: rgba(74,222,128,0.12);  color: var(--green); }
+    .chip-err  { background: rgba(248,113,113,0.12); color: var(--red); }
+    @keyframes chip-blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+```
+
+- [ ] **Step 2: Add screen 8 HTML** (inside `#app`, after screen 7)
+
+```html
+  <!-- ══ Screen 8: Simulation ══ -->
+  <div class="screen" id="s8">
+    <div class="sim-wrap">
+      <div class="sim-title">Simulating your futures…</div>
+      <div class="sim-sub">5 specialist agents running in parallel. About 20 seconds.</div>
+      <div class="agents">
+        <div class="agent" id="ag-coordinator">
+          <div class="agent-icon">🧭</div>
+          <div style="flex:1">
+            <div class="agent-name">Coordinator</div>
+            <div class="agent-status" id="st-coordinator">Waiting…</div>
+          </div>
+        </div>
+        <div class="agent" id="ag-career">
+          <div class="agent-icon">📈</div>
+          <div style="flex:1">
+            <div class="agent-name">Career evaluator</div>
+            <div class="agent-status" id="st-career">Waiting…</div>
+          </div>
+        </div>
+        <div class="agent" id="ag-finance">
+          <div class="agent-icon">💰</div>
+          <div style="flex:1">
+            <div class="agent-name">Finance evaluator</div>
+            <div class="agent-status" id="st-finance">Waiting…</div>
+          </div>
+        </div>
+        <div class="agent" id="ag-risk">
+          <div class="agent-icon">⚠️</div>
+          <div style="flex:1">
+            <div class="agent-name">Risk evaluator</div>
+            <div class="agent-status" id="st-risk">Waiting…</div>
+          </div>
+        </div>
+        <div class="agent" id="ag-decision">
+          <div class="agent-icon">🏆</div>
+          <div style="flex:1">
+            <div class="agent-name">Decision agent</div>
+            <div class="agent-status" id="st-decision">Waiting…</div>
+          </div>
+        </div>
+      </div>
+      <div id="sim-error"></div>
+    </div>
+  </div>
+```
+
+- [ ] **Step 3: Add simulation JS helper functions** (append in `<script>`)
+
+```js
+  // ── Simulation agent UI helpers ──
+  function setAgent(name, state, statusText) {
+    const el = document.getElementById('ag-' + name);
+    const st = document.getElementById('st-' + name);
+    if (!el || !st) return;
+    el.classList.remove('running', 'done', 'error');
+    if (state) el.classList.add(state);
+    st.textContent = statusText;
+    // Update chip
+    const existing = el.querySelector('.agent-chip');
+    if (existing) existing.remove();
+    if (state === 'running') {
+      const c = document.createElement('div');
+      c.className = 'agent-chip chip-run'; c.textContent = 'Running';
+      el.appendChild(c);
+    } else if (state === 'done') {
+      const c = document.createElement('div');
+      c.className = 'agent-chip chip-done'; c.textContent = 'Done';
+      el.appendChild(c);
+    } else if (state === 'error') {
+      const c = document.createElement('div');
+      c.className = 'agent-chip chip-err'; c.textContent = 'Error';
+      el.appendChild(c);
+    }
+  }
+
+  function resetAgentUI() {
+    ['coordinator','career','finance','risk','decision'].forEach(name => {
+      setAgent(name, '', 'Waiting…');
+    });
+    document.getElementById('sim-error').innerHTML = '';
+  }
+
+  function showSimError(msg) {
+    const div = document.getElementById('sim-error');
+    div.innerHTML = `<div class="error-banner" style="margin-top:16px">Error: ${escapeHtml(msg)}</div>`;
+  }
+```
+
+- [ ] **Step 4: Verify simulation screen renders**
+
+Walk through all steps to reach screen 8. Expected: 5 agent rows in "Waiting…" state, no errors.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add life-sandbox/frontend.html
+git commit -m "feat: simulation screen — agent pipeline rows with state transitions"
+```
+
+---
+
+## Task 8: SSE wiring — connect simulation screen to real backend
+
+**Files:**
+- Modify: `life-sandbox/frontend.html`
+
+- [ ] **Step 1: Add `runSSE` and `consumeSSE` functions** (append in `<script>`)
+
+```js
+  // ── SSE pipeline ──
+  let decisionData = null; // stored on 'decision' event, read by screen 9
+
+  async function runSSE() {
+    resetAgentUI();
+    setAgent('coordinator', 'running', 'Proposing career paths…');
+
+    let res;
+    try {
+      res = await fetch('/simulate/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stage:          profile.stage          || 'undergrad',
+          field:          profile.field          || '',
+          location:       profile.location       || '',
+          risk_tolerance: profile.risk_tolerance ?? 0.4,
+          ambition:       profile.ambition       ?? 0.7,
+          notes:          profile.notes          || '',
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      await consumeSSE(res);
+    } catch (err) {
+      showSimError(err.message || String(err));
+    }
+  }
+
+  async function consumeSSE(res) {
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let evalStarted = false;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let sep;
+      while ((sep = buffer.indexOf('\n\n')) >= 0) {
+        const block   = buffer.slice(0, sep);
+        buffer        = buffer.slice(sep + 2);
+        const event   = (block.match(/^event:\s*(.+)$/m)  || [])[1];
+        const dataStr = (block.match(/^data:\s*(.+)$/m)   || [])[1];
+        if (!event || !dataStr) continue;
+
+        let data;
+        try { data = JSON.parse(dataStr); } catch { continue; }
+
+        if (event === 'stage') {
+          if (data.stage === 'candidates') {
+            setAgent('coordinator', 'running', 'Proposing career paths…');
+          }
+          if (data.stage === 'evaluating' && !evalStarted) {
+            evalStarted = true;
+            setAgent('career',  'running', 'Modeling trajectory…');
+            setAgent('finance', 'running', 'Modeling comp curves…');
+            setAgent('risk',    'running', 'Analyzing risk…');
+          }
+          if (data.stage === 'deciding') {
+            setAgent('decision', 'running', 'Ranking by your utility…');
+          }
+
+        } else if (event === 'candidates') {
+          setAgent('coordinator', 'done', `Generated ${data.paths.length} candidate paths`);
+
+        } else if (event === 'career') {
+          setAgent('career', 'done', 'Career trajectory analysis · done');
+
+        } else if (event === 'finance') {
+          setAgent('finance', 'done', 'Compensation modeling · done');
+
+        } else if (event === 'risk') {
+          setAgent('risk', 'done', 'Risk & downside analysis · done');
+
+        } else if (event === 'decision') {
+          setAgent('decision', 'done', 'Ranked by your utility score');
+          decisionData = data;
+          setTimeout(() => advance(9), 700);
+
+        } else if (event === 'error') {
+          showSimError(data.error);
+          return;
+
+        } else if (event === 'done') {
+          return;
+        }
+      }
+    }
+  }
+```
+
+- [ ] **Step 2: Verify with real backend**
+
+Make sure backend is running: `cd life-sandbox && uv run python backend.py`
+Walk through all steps, click "Simulate my life 🚀".
+Expected:
+- Agent rows animate from "Waiting" → "Running" → "Done" as SSE events arrive
+- After `decision` event, screen auto-advances to s9 (doesn't exist yet — that's OK)
+- No console errors during SSE streaming
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add life-sandbox/frontend.html
+git commit -m "feat: SSE wiring — connect agent pipeline UI to /simulate/stream"
+```
+
+---
+
+## Task 9: Screen 9 — Results with career costumes and charts
+
+**Files:**
+- Modify: `life-sandbox/frontend.html`
+
+- [ ] **Step 1: Add results screen CSS** (append inside `<style>`)
+
+```css
+    /* ── Screen 9: Results ── */
+    .results-wrap { width: 100%; max-width: 640px; }
+    .results-title { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 6px; }
+    .results-sub   { font-size: 14px; color: var(--muted); margin-bottom: 22px; }
+
+    .path-cards { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
+    .path-card {
+      border-radius: 16px; border: 1px solid rgba(255,255,255,0.07);
+      background: rgba(255,255,255,0.02); overflow: hidden;
+      animation: card-in 0.45s ease var(--card-delay, 0.05s) both;
+    }
+    @keyframes card-in { from { opacity:0; transform:translateX(-14px); } to { opacity:1; transform:translateX(0); } }
+    .path-card.rank-1 { border-color: rgba(99,102,241,0.4); background: rgba(99,102,241,0.05); }
+
+    .card-header {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px 20px;
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .card-rank-badge {
+      width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 800;
+      background: rgba(255,255,255,0.06); color: var(--muted);
+    }
+    .rank-1 .card-rank-badge { background: linear-gradient(135deg, var(--indigo), var(--purple)); color: white; }
+
+    .card-costume { font-size: 32px; flex-shrink: 0; }
+    .card-meta    { flex: 1; }
+    .card-title   { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+    .card-arch    { font-size: 11px; color: var(--muted); }
+    .card-utility { font-size: 22px; font-weight: 900; color: #818cf8; font-variant-numeric: tabular-nums; }
+    .rank-2 .card-utility, .rank-3 .card-utility { color: var(--muted); }
+
+    .card-body { padding: 14px 20px 18px; }
+    .card-summary { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 12px; }
+    .chart-wrap { height: 80px; margin-bottom: 12px; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .chip {
+      font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+      color: var(--muted);
+    }
+    .chip.good { color: var(--green);  border-color: rgba(74,222,128,0.25); }
+    .chip.warn { color: var(--amber);  border-color: rgba(251,191,36,0.25); }
+    .chip.bad  { color: var(--red);    border-color: rgba(248,113,113,0.25); }
+
+    .why-block { margin-bottom: 8px; }
+    .why-label { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+    .why-text  { font-size: 12px; color: var(--text); line-height: 1.5; }
+
+    .btn-restart {
+      width: 100%; padding: 13px; border-radius: 12px;
+      background: transparent; border: 1px solid rgba(255,255,255,0.1);
+      color: var(--muted); font-family: inherit; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-restart:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+```
+
+- [ ] **Step 2: Add screen 9 HTML** (inside `#app`, after screen 8)
+
+```html
+  <!-- ══ Screen 9: Results ══ -->
+  <div class="screen" id="s9">
+    <div class="results-wrap">
+      <div class="results-title" id="results-title">Your simulated futures</div>
+      <div class="results-sub" id="results-sub">Ranked by utility score</div>
+      <div class="path-cards" id="path-cards"></div>
+      <button class="btn-restart" onclick="restartFlow()">↺ Start over with different choices</button>
+    </div>
+  </div>
+```
+
+- [ ] **Step 3: Add results rendering JS** (append in `<script>`)
+
+```js
+  // Career costume map — emoji per archetype keyword
+  const COSTUMES = {
+    corporate_ic: '🧑‍💻',
+    founder:      '🧑‍🚀',
+    quant:        '🧑‍🔬',
+    consultant:   '🧑‍💼',
+    researcher:   '🧑‍🔬',
+    freelance:    '🧑‍🎨',
+    other:        '🧑‍💻',
+  };
+
+  function costumeFor(archetype) {
+    const key = (archetype || '').toLowerCase().replace(/[^a-z_]/g, '_');
+    for (const [k, v] of Object.entries(COSTUMES)) {
+      if (key.includes(k.replace('_ic','').split('_')[0])) return v;
+    }
+    return '🧑‍💻';
+  }
+
+  function fmtMoney(n) {
+    if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000)     return '$' + Math.round(n / 1_000) + 'k';
+    return '$' + Math.round(n);
+  }
+  function fmtPct(p) { return Math.round(p * 100) + '%'; }
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c =>
+      ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function ruinChipClass(p) {
+    if (p < 0.10) return 'good';
+    if (p < 0.30) return 'warn';
+    return 'bad';
+  }
+
+  const activeCharts = [];
+
+  function renderResults(data) {
+    // Destroy previous charts
+    activeCharts.forEach(c => c.destroy());
+    activeCharts.length = 0;
+
+    const top3 = data.top3 || [];
+    document.getElementById('results-title').textContent = `Your ${top3.length} simulated futures`;
+    document.getElementById('results-sub').textContent =
+      `Ranked by utility · Risk ${profile.risk_tolerance?.toFixed(2)} · Ambition ${profile.ambition?.toFixed(2)}`;
+
+    const container = document.getElementById('path-cards');
+    container.innerHTML = top3.map((p, i) => `
+      <div class="path-card rank-${i+1}" style="--card-delay:${0.05 + i * 0.13}s">
+        <div class="card-header">
+          <div class="card-rank-badge">${i + 1}</div>
+          <div class="card-costume">${costumeFor(p.archetype)}</div>
+          <div class="card-meta">
+            <div class="card-title">${escapeHtml(p.title)}</div>
+            <div class="card-arch">${escapeHtml(p.archetype)}</div>
+          </div>
+          <div class="card-utility">${(p.utility_score ?? 0).toFixed(2)}</div>
+        </div>
+        <div class="card-body">
+          <div class="card-summary">${escapeHtml(p.summary)}</div>
+          <div class="chart-wrap"><canvas id="chart-${i}"></canvas></div>
+          <div class="chips">
+            <span class="chip good">EV ${fmtMoney(p.ev_5y)}</span>
+            <span class="chip ${ruinChipClass(p.ruin_prob_5y)}">Ruin ${fmtPct(p.ruin_prob_5y)}</span>
+            <span class="chip">Growth ${fmtPct(p.growth_rate)}</span>
+          </div>
+          <div class="why-block">
+            <div class="why-label">Why it fits you</div>
+            <div class="why-text">${escapeHtml(p.why)}</div>
+          </div>
+          <div class="why-block">
+            <div class="why-label">Trade-offs</div>
+            <div class="why-text">${escapeHtml(p.tradeoffs)}</div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    // Draw sparkline charts
+    top3.forEach((p, i) => drawSparkline(i, p.salary_curve_5y, p.stddev_curve_5y));
+  }
+
+  function drawSparkline(idx, mean, stddev) {
+    const ctx = document.getElementById('chart-' + idx);
+    if (!ctx) return;
+    const labels = mean.map((_, i) => 'Y' + (i + 1));
+    const upper  = mean.map((m, i) => m + (stddev[i] ?? 0));
+    const lower  = mean.map((m, i) => Math.max(0, m - (stddev[i] ?? 0)));
+    const chart  = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { data: upper, borderWidth: 0, pointRadius: 0, fill: '+1', backgroundColor: 'rgba(99,102,241,0.12)' },
+          { data: lower, borderWidth: 0, pointRadius: 0, fill: false },
+          { label: 'Mean', data: mean, borderColor: '#6366f1', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.3 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmtMoney(c.parsed.y) } },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: '#6e7693', font: { size: 10 } } },
+          y: {
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: { color: '#6e7693', font: { size: 10 }, callback: v => fmtMoney(v) },
+          },
+        },
+      },
+    });
+    activeCharts.push(chart);
+  }
+
+  function restartFlow() {
+    // Reset profile
+    Object.assign(profile, { stage:'undergrad', field:'', location:'', risk_tolerance:0.4, ambition:0.7, notes:'' });
+    document.getElementById('input-field').value    = '';
+    document.getElementById('input-location').value = '';
+    document.getElementById('input-notes').value    = '';
+    document.getElementById('risk-slider').value    = '0.4';
+    document.getElementById('amb-slider').value     = '0.7';
+    initSlider('risk-slider', 'risk-display', 'risk_tolerance');
+    initSlider('amb-slider',  'amb-display',  'ambition');
+    // Reset stage selection
+    document.querySelectorAll('#stage-choices .choice').forEach(c =>
+      c.classList.toggle('active', c.dataset.val === 'undergrad'));
+    retreat(1);
+  }
+
+  // Hook results rendering to screen 9 activation — patch goTo
+  const _origGoTo = goTo;
+  // Override advance to s9 to also render results
+  const _origAdvance = advance;
+  // Instead, patch at the point where decisionData is set: after decision event
+  // goTo(9) is called by SSE handler — hook screen 9 entry
+  const _goToOrig = window.goTo; // not needed, patch directly in consumeSSE: renderResults called there
+```
+
+- [ ] **Step 4: Wire `renderResults` into SSE handler**
+
+Find the `decision` event handler in `consumeSSE` (the `else if (event === 'decision')` block) and update it:
+
+```js
+        } else if (event === 'decision') {
+          setAgent('decision', 'done', 'Ranked by your utility score');
+          decisionData = data;
+          renderResults(data);          // ← add this line
+          setTimeout(() => advance(9), 700);
+```
+
+- [ ] **Step 5: Verify full end-to-end flow**
+
+Walk through the full flow with backend running.
+Expected:
+- Walk all 9 screens, walker moves along road
+- Simulation screen shows agents running
+- Results screen shows path cards with emoji costumes, sparkline charts, utility scores, EV/ruin chips
+- "Start over" button resets and goes back to screen 1
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add life-sandbox/frontend.html
+git commit -m "feat: results screen — career costumes, sparkline charts, restart flow"
+```
+
+---
+
+## Task 10: Polish — `.gitignore`, responsive check, final review
+
+**Files:**
+- Modify: `.gitignore` (project root or `life-sandbox/`)
+- Modify: `life-sandbox/frontend.html` (minor fixes only)
+
+- [ ] **Step 1: Add `.superpowers/` to `.gitignore`**
+
+```bash
+echo '.superpowers/' >> /Users/ruizhang/Documents/hackthon-multi-agent/ag2-hackathon/.gitignore
+```
+
+Verify it's not already tracked:
+```bash
+git -C /Users/ruizhang/Documents/hackthon-multi-agent/ag2-hackathon check-ignore -v .superpowers/
+```
+Expected: line printed confirming the pattern matches.
+
+- [ ] **Step 2: Verify mobile layout**
+
+Open DevTools → toggle device toolbar → iPhone 14 Pro (390×844).
+Check:
+- Landing title doesn't overflow (uses `clamp`)
+- Slider big value doesn't overflow
+- All step screens scroll if needed (add `overflow-y: auto` to `.screen` if they clip)
+
+If clipping: add `overflow-y: auto;` to the `.screen` rule in `<style>`.
+
+- [ ] **Step 3: Verify no console errors on full run**
+
+Open DevTools console. Run through entire flow end-to-end with backend running. Expected: zero errors. Fix any that appear.
+
+- [ ] **Step 4: Final commit**
+
+```bash
+git add life-sandbox/frontend.html .gitignore
+git commit -m "chore: responsive polish and gitignore .superpowers/ brainstorm dir"
+```
+
+---
+
+## Self-review
+
+**Spec coverage check:**
+
+| Spec requirement | Task covering it |
+|-----------------|-----------------|
+| Cinematic RPG visual language | Task 1–2 (CSS vars, orbital rings, starfield) |
+| Walking figure on road | Task 3 |
+| Companion speech bubble | Task 3 |
+| LinkedIn URL as hero input | Task 4 |
+| Step-by-step 6-step profile | Tasks 5–6 |
+| Risk + Ambition sliders with big display | Task 6 |
+| Agent pipeline simulation screen | Task 7 |
+| SSE wiring to real backend | Task 8 |
+| Career costume characters on results | Task 9 |
+| Chart.js sparklines per path | Task 9 |
+| EV / Ruin / Growth chips | Task 9 |
+| Why + Tradeoffs per path | Task 9 |
+| Restart flow | Task 9 |
+| `.superpowers/` gitignore | Task 10 |
+| Mobile responsive | Task 10 |
+
+All spec sections covered. No gaps found.
+
+**Placeholder scan:** No TBDs, all code blocks complete, all function names consistent across tasks (`setAgent`, `consumeSSE`, `renderResults`, `drawSparkline`, `fmtMoney`, `fmtPct`, `escapeHtml` — consistent usage).
+
+**Type consistency:** `profile` object populated in Tasks 4–6, consumed verbatim in Task 8 `runSSE()`. `decisionData.top3` (array of `RankedPath`) passed to `renderResults()` in Task 9 — matches backend `DecisionOutput.top3` schema.
