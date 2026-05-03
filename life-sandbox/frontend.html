@@ -272,6 +272,28 @@
       cursor: pointer; transition: border-color 0.15s, color 0.15s;
     }
     .li-skip:hover { border-color: rgba(255,255,255,0.18); color: rgba(255,255,255,0.6); }
+
+    /* ── Step screens: choice cards ── */
+    .choices { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 32px; }
+    .choice {
+      padding: 12px 20px; border-radius: 12px; cursor: pointer;
+      background: rgba(255,255,255,0.03); border: 1.5px solid rgba(255,255,255,0.08);
+      font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.65);
+      transition: all 0.15s; display: flex; align-items: center; gap: 8px;
+    }
+    .choice:hover  { background: rgba(99,102,241,0.08); border-color: rgba(99,102,241,0.3); color: var(--text); }
+    .choice.active { background: rgba(99,102,241,0.14); border-color: var(--indigo); color: var(--text); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+    .choice-icon   { font-size: 18px; }
+
+    .step-input {
+      width: 100%; background: rgba(255,255,255,0.04);
+      color: var(--text); border: 1.5px solid rgba(255,255,255,0.1);
+      border-radius: 12px; padding: 14px 18px;
+      font-family: inherit; font-size: 16px; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s; margin-bottom: 32px;
+    }
+    .step-input:focus { border-color: rgba(99,102,241,0.5); box-shadow: 0 0 0 4px rgba(99,102,241,0.08); }
+    .step-input::placeholder { color: rgba(255,255,255,0.2); }
   </style>
 </head>
 <body>
@@ -312,6 +334,52 @@
   </div>
   <div id="companion" style="left:8%">
     <div class="comp-bubble" id="comp-bubble">Ready to find your path?</div>
+  </div>
+
+  <!-- ══ Screen 2: Stage ══ -->
+  <div class="screen" id="s2">
+    <div class="step-shell">
+      <div class="step-q">Where are you in life right now?</div>
+      <div class="step-hint">This sets the baseline for your simulation.</div>
+      <div class="choices" id="stage-choices">
+        <div class="choice" data-val="high_school"><span class="choice-icon">🏫</span>High school</div>
+        <div class="choice active" data-val="undergrad"><span class="choice-icon">🎓</span>Undergrad</div>
+        <div class="choice" data-val="new_grad"><span class="choice-icon">💼</span>Recent grad</div>
+      </div>
+      <div class="step-nav">
+        <button class="btn-back" onclick="retreat(1)">← Back</button>
+        <div class="step-dots" id="dots-s2"></div>
+        <button class="btn-next" onclick="advance(3)">Continue →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Screen 3: Field ══ -->
+  <div class="screen" id="s3">
+    <div class="step-shell">
+      <div class="step-q">What's your field?</div>
+      <div class="step-hint">Your major or area of study.</div>
+      <input class="step-input" id="input-field" type="text" placeholder="e.g. Computer Science, Finance, Biology…"/>
+      <div class="step-nav">
+        <button class="btn-back" onclick="retreat(2)">← Back</button>
+        <div class="step-dots" id="dots-s3"></div>
+        <button class="btn-next" onclick="saveField()">Continue →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Screen 4: Location ══ -->
+  <div class="screen" id="s4">
+    <div class="step-shell">
+      <div class="step-q">Where do you want to be?</div>
+      <div class="step-hint">City, region, or remote — shapes compensation benchmarks.</div>
+      <input class="step-input" id="input-location" type="text" placeholder="e.g. San Francisco, NYC, Remote…"/>
+      <div class="step-nav">
+        <button class="btn-back" onclick="retreat(3)">← Back</button>
+        <div class="step-dots" id="dots-s4"></div>
+        <button class="btn-next" onclick="saveLocation()">Continue →</button>
+      </div>
+    </div>
   </div>
 
   <!-- ══ Screen 1: Landing ══ -->
@@ -472,6 +540,28 @@
     advance(3);
   });
   document.getElementById('li-skip-btn').addEventListener('click', () => advance(2));
+
+  document.getElementById('stage-choices').addEventListener('click', e => {
+    const card = e.target.closest('.choice');
+    if (!card) return;
+    document.querySelectorAll('#stage-choices .choice').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+    profile.stage = card.dataset.val;
+  });
+
+  function saveField() {
+    const val = document.getElementById('input-field').value.trim();
+    if (!val) { document.getElementById('input-field').focus(); return; }
+    profile.field = val;
+    advance(4);
+  }
+
+  function saveLocation() {
+    const val = document.getElementById('input-location').value.trim();
+    if (!val) { document.getElementById('input-location').focus(); return; }
+    profile.location = val;
+    advance(5);
+  }
 </script>
 </body>
 </html>
