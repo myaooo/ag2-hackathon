@@ -45,6 +45,7 @@ PROJECT_FILES = [
     "pyproject.toml",
     "schemas.py",
     "agents.py",
+    "ingest.py",
     "backend.py",
     "frontend.html",
 ]
@@ -117,7 +118,7 @@ def main() -> None:
         "pip install --quiet --upgrade pip && "
         "pip install --quiet "
         "'ag2[gemini,openai] @ git+https://github.com/ag2ai/ag2.git@main' "
-        "fastapi uvicorn python-dotenv pydantic",
+        "fastapi uvicorn python-dotenv pydantic httpx beautifulsoup4",
         cwd=REMOTE_DIR,
         timeout=600,
     )

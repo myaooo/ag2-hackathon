@@ -59,6 +59,7 @@ from agents import (
     build_decision_agent,
     build_finance_evaluator,
     build_ingest_agent,
+    build_lifestyle_evaluator,
     build_risk_evaluator,
 )
 import ingest
@@ -70,6 +71,7 @@ from schemas import (
     IngestRequest,
     IngestResponse,
     IngestSummary,
+    LifestyleOutput,
     PathCandidates,
     ProfileExtract,
     RankedPath,
@@ -90,6 +92,7 @@ coordinator = build_coordinator()
 career_eval = build_career_evaluator()
 finance_eval = build_finance_evaluator()
 risk_eval = build_risk_evaluator()
+lifestyle_eval = build_lifestyle_evaluator()
 decision_agent = build_decision_agent()
 ingest_agent = build_ingest_agent()
 career_advice_agent = build_career_advice_agent()
@@ -168,12 +171,24 @@ async def _evaluate_risk(profile: UserProfile, paths: PathCandidates) -> RiskOut
     return await reply.content(retries=2)
 
 
+async def _evaluate_lifestyle(profile: UserProfile, paths: PathCandidates) -> LifestyleOutput:
+    prompt = (
+        f"{_profile_block(profile)}\n"
+        f"Candidate paths (evaluate ALL three, in order, by id):\n"
+        f"{paths.model_dump_json(indent=2)}\n\n"
+        "Return one LifestyleEval per path. Use the provided `id` as path_id."
+    )
+    reply = await lifestyle_eval.ask(prompt)
+    return await reply.content(retries=2)
+
+
 async def _decide(
     profile: UserProfile,
     paths: PathCandidates,
     career: CareerOutput,
     finance: FinanceOutput,
     risk: RiskOutput,
+    lifestyle: LifestyleOutput,
 ) -> DecisionOutput:
     prompt = (
         f"{_profile_block(profile)}\n"
@@ -181,26 +196,29 @@ async def _decide(
         f"Career evaluations:\n{career.model_dump_json(indent=2)}\n\n"
         f"Finance evaluations:\n{finance.model_dump_json(indent=2)}\n\n"
         f"Risk evaluations:\n{risk.model_dump_json(indent=2)}\n\n"
+        f"Lifestyle evaluations:\n{lifestyle.model_dump_json(indent=2)}\n\n"
         "Score each path with a utility function tailored to THIS user's "
         "risk_tolerance and ambition, and return all 3 sorted by utility. "
-        "Surface the salary curves, EV, ruin probability, and growth rate "
-        "from the evaluations into each RankedPath."
+        "Surface salary curves, EV, ruin probability, growth rate, work hours, "
+        "pressure level, wlb_score, and burnout probability from the evaluations "
+        "into each RankedPath."
     )
     reply = await decision_agent.ask(prompt)
     return await reply.content(retries=2)
 
 
 async def run_pipeline(profile: UserProfile) -> DecisionOutput:
-    """Synchronous pipeline — runs the 3 evaluators in parallel."""
+    """Synchronous pipeline — runs the 4 evaluators in parallel."""
     paths = await _generate_candidates(profile)
 
-    career, finance, risk = await asyncio.gather(
+    career, finance, risk, lifestyle = await asyncio.gather(
         _evaluate_career(profile, paths),
         _evaluate_finance(profile, paths),
         _evaluate_risk(profile, paths),
+        _evaluate_lifestyle(profile, paths),
     )
 
-    return await _decide(profile, paths, career, finance, risk)
+    return await _decide(profile, paths, career, finance, risk, lifestyle)
 
 
 # ---------------------------------------------------------------------------
@@ -307,9 +325,10 @@ async def simulate_stream(profile: UserProfile) -> StreamingResponse:
 
             # Run evaluators in parallel; emit each as it finishes.
             tasks = {
-                "career": asyncio.create_task(_evaluate_career(profile, paths)),
-                "finance": asyncio.create_task(_evaluate_finance(profile, paths)),
-                "risk": asyncio.create_task(_evaluate_risk(profile, paths)),
+                "career":    asyncio.create_task(_evaluate_career(profile, paths)),
+                "finance":   asyncio.create_task(_evaluate_finance(profile, paths)),
+                "risk":      asyncio.create_task(_evaluate_risk(profile, paths)),
+                "lifestyle": asyncio.create_task(_evaluate_lifestyle(profile, paths)),
             }
 
             results: dict[str, object] = {}
@@ -331,6 +350,7 @@ async def simulate_stream(profile: UserProfile) -> StreamingResponse:
                 results["career"],     # type: ignore[arg-type]
                 results["finance"],    # type: ignore[arg-type]
                 results["risk"],       # type: ignore[arg-type]
+                results["lifestyle"],  # type: ignore[arg-type]
             )
             yield sse("decision", decision.model_dump())
             yield sse("done", {"ok": True})

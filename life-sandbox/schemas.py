@@ -86,6 +86,18 @@ class RiskOutput(BaseModel):
     evals: Annotated[list[RiskEval], Field(min_length=3, max_length=3)]
 
 
+class LifestyleEval(BaseModel):
+    path_id: str
+    work_hours_per_week: Annotated[float, Field(ge=0.0, le=120.0, description="Sustained typical hours/week (not crunch peaks)")]
+    pressure_level: Annotated[float, Field(ge=0.0, le=1.0, description="Day-to-day stress / intensity, 0=calm, 1=relentless")]
+    wlb_score: Annotated[float, Field(ge=0.0, le=1.0, description="Overall work-life balance: hours + flexibility + vacation + on-call. 0=brutal, 1=excellent")]
+    burnout_prob_5y: Annotated[float, Field(ge=0.0, le=1.0, description="Probability of significant burnout within 5 years")]
+
+
+class LifestyleOutput(BaseModel):
+    evals: Annotated[list[LifestyleEval], Field(min_length=3, max_length=3)]
+
+
 # ---------------------------------------------------------------------------
 # Decision agent output
 # ---------------------------------------------------------------------------
@@ -105,6 +117,11 @@ class RankedPath(BaseModel):
     ev_5y: float
     ruin_prob_5y: float
     growth_rate: float
+    # Lifestyle dimension — surfaced for the comparison view
+    work_hours_per_week: float
+    pressure_level: Annotated[float, Field(ge=0.0, le=1.0)]
+    wlb_score: Annotated[float, Field(ge=0.0, le=1.0)]
+    burnout_prob_5y: Annotated[float, Field(ge=0.0, le=1.0)]
 
 
 class DecisionOutput(BaseModel):

@@ -423,6 +423,172 @@
       cursor: pointer; transition: border-color 0.15s, color 0.15s;
     }
     .btn-restart:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+
+    /* ── Career advice (post-pick agent) ── */
+    .advice-btn {
+      margin-top: 14px; width: 100%; padding: 12px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--indigo), var(--purple));
+      color: white; font-family: inherit; font-size: 13px; font-weight: 700;
+      border: none; cursor: pointer;
+      box-shadow: 0 2px 12px rgba(99,102,241,0.25);
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .advice-btn:hover:not(:disabled)  { opacity: 0.92; }
+    .advice-btn:active:not(:disabled) { transform: scale(0.98); }
+    .advice-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .path-card.chosen {
+      border-color: rgba(99,102,241,0.55);
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+    }
+    .path-card.dimmed { opacity: 0.4; transition: opacity 0.3s; }
+
+    .advice-block {
+      margin-top: 14px; padding: 14px;
+      border-radius: 10px;
+      background: rgba(99,102,241,0.05);
+      border: 1px solid rgba(99,102,241,0.18);
+      animation: card-in 0.4s ease;
+    }
+    .advice-headline {
+      font-size: 14px; font-weight: 700; color: var(--text);
+      line-height: 1.45; margin-bottom: 10px;
+    }
+    .advice-section { margin-top: 12px; }
+    .advice-section h4 {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+    }
+    .advice-section ul { list-style: none; padding: 0; margin: 0; }
+    .advice-section li {
+      font-size: 12px; color: var(--text); line-height: 1.55;
+      padding: 4px 0 4px 16px; position: relative;
+    }
+    .advice-section li::before {
+      content: '→'; position: absolute; left: 0; color: #818cf8; font-weight: 700;
+    }
+
+    /* ── Orchestration dash (Feature 1) ── */
+    #orch-toggle {
+      position: fixed; top: 12px; right: 12px; z-index: 200;
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 7px 13px; border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--muted); font-family: inherit; font-size: 11px; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      cursor: pointer; backdrop-filter: blur(8px);
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    #orch-toggle:hover { color: var(--text); border-color: rgba(99,102,241,0.4); }
+    #orch-toggle.on {
+      color: #818cf8;
+      border-color: rgba(99,102,241,0.45);
+      background: rgba(99,102,241,0.08);
+    }
+    .orch-toggle-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: rgba(255,255,255,0.25);
+      transition: background 0.15s, box-shadow 0.15s;
+    }
+    #orch-toggle.on .orch-toggle-dot {
+      background: var(--indigo);
+      box-shadow: 0 0 10px rgba(99,102,241,0.7);
+    }
+
+    #orch-panel {
+      position: fixed; top: 56px; right: 12px; z-index: 199;
+      width: 290px; padding: 14px 14px 10px;
+      background: rgba(13, 17, 23, 0.92);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      transform-origin: top right;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+    #orch-panel.hidden {
+      opacity: 0; transform: scale(0.95) translateY(-6px); pointer-events: none;
+    }
+    .orch-panel-title {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 8px;
+    }
+    #orch-svg { width: 100%; height: 410px; display: block; }
+    .orch-label-sub {
+      font-size: 8px; font-weight: 600; letter-spacing: 0.04em;
+      fill: rgba(255,255,255,0.3); pointer-events: none;
+    }
+
+    .orch-edge {
+      fill: none;
+      stroke: rgba(255,255,255,0.08);
+      stroke-width: 1.5;
+      transition: stroke 0.3s, stroke-width 0.3s;
+    }
+    .orch-edge.active {
+      stroke: var(--indigo);
+      stroke-width: 2;
+      stroke-dasharray: 5 5;
+      animation: orch-flow 0.9s linear infinite;
+    }
+    .orch-edge.done {
+      stroke: rgba(74,222,128,0.4);
+    }
+    /* User-gated edge: subtle dashed pattern when idle, signaling "waits for user". */
+    .orch-edge.user-gated {
+      stroke-dasharray: 3 4;
+      stroke: rgba(255,255,255,0.12);
+    }
+    @keyframes orch-flow {
+      from { stroke-dashoffset: 10; }
+      to   { stroke-dashoffset: 0; }
+    }
+
+    .orch-node circle {
+      stroke: rgba(255,255,255,0.18);
+      stroke-width: 2;
+      fill: rgba(255,255,255,0.04);
+      transition: stroke 0.3s, fill 0.3s, stroke-width 0.3s;
+    }
+    .orch-node.running circle {
+      stroke: var(--indigo);
+      fill: rgba(99,102,241,0.18);
+      animation: orch-pulse 1.4s ease-in-out infinite;
+    }
+    .orch-node.done circle {
+      stroke: var(--green);
+      fill: rgba(74,222,128,0.12);
+    }
+    .orch-node.error circle {
+      stroke: var(--red);
+      fill: rgba(248,113,113,0.12);
+    }
+    @keyframes orch-pulse {
+      0%, 100% { stroke-width: 2; }
+      50%      { stroke-width: 4; }
+    }
+    .orch-icon { font-size: 16px; pointer-events: none; }
+    .orch-label {
+      font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; fill: var(--muted);
+      pointer-events: none;
+    }
+    .orch-node.running .orch-label { fill: #818cf8; }
+    .orch-node.done    .orch-label { fill: var(--green); }
+    .orch-node.error   .orch-label { fill: var(--red); }
+
+    .orch-legend {
+      display: flex; gap: 12px; margin-top: 8px;
+      font-size: 10px; color: var(--muted);
+    }
+    .orch-legend-dot {
+      display: inline-block; width: 6px; height: 6px;
+      border-radius: 50%; margin-right: 5px; vertical-align: middle;
+    }
+    .orch-legend-dot.idle    { background: rgba(255,255,255,0.25); }
+    .orch-legend-dot.running { background: var(--indigo); box-shadow: 0 0 6px rgba(99,102,241,0.7); }
+    .orch-legend-dot.done    { background: var(--green); }
   </style>
 </head>
 <body>
@@ -430,6 +596,69 @@
   <div class="bg-layer"></div>
   <div class="stars" id="stars"></div>
   <div id="progress-bar"><div id="progress-fill"></div></div>
+
+  <!-- Orchestration dash (Feature 1) — toggle + floating panel -->
+  <button id="orch-toggle" type="button" aria-pressed="false" title="Show multi-agent topology">
+    <span class="orch-toggle-dot"></span>
+    Topology
+  </button>
+  <div id="orch-panel" class="hidden" role="region" aria-label="Multi-agent orchestration">
+    <div class="orch-panel-title">Multi-agent orchestration</div>
+    <svg id="orch-svg" viewBox="0 0 280 410" xmlns="http://www.w3.org/2000/svg">
+      <!-- Edges (drawn first, behind nodes). 4 evaluators in parallel: x = 35, 105, 175, 245 -->
+      <path class="orch-edge" id="e-coord-career"     d="M 140,50  Q  95,90   35,118" />
+      <path class="orch-edge" id="e-coord-finance"    d="M 140,50  Q 125,85  105,118" />
+      <path class="orch-edge" id="e-coord-risk"       d="M 140,50  Q 155,85  175,118" />
+      <path class="orch-edge" id="e-coord-lifestyle"  d="M 140,50  Q 185,90  245,118" />
+      <path class="orch-edge" id="e-career-decision"     d="M  35,158 Q  80,203 140,228" />
+      <path class="orch-edge" id="e-finance-decision"    d="M 105,158 Q 120,203 140,228" />
+      <path class="orch-edge" id="e-risk-decision"       d="M 175,158 Q 160,203 140,228" />
+      <path class="orch-edge" id="e-lifestyle-decision"  d="M 245,158 Q 200,203 140,228" />
+      <path class="orch-edge user-gated" id="e-decision-advice" d="M 140,268 L 140,338" />
+      <!-- Nodes -->
+      <g class="orch-node" id="orch-coordinator">
+        <circle cx="140" cy="30" r="20" />
+        <text class="orch-icon"  x="140" y="35" text-anchor="middle">🧭</text>
+        <text class="orch-label" x="140" y="68" text-anchor="middle">Coordinator</text>
+      </g>
+      <g class="orch-node" id="orch-career">
+        <circle cx="35" cy="138" r="18" />
+        <text class="orch-icon"  x="35" y="143" text-anchor="middle">📈</text>
+        <text class="orch-label" x="35" y="174" text-anchor="middle">Career</text>
+      </g>
+      <g class="orch-node" id="orch-finance">
+        <circle cx="105" cy="138" r="18" />
+        <text class="orch-icon"  x="105" y="143" text-anchor="middle">💰</text>
+        <text class="orch-label" x="105" y="174" text-anchor="middle">Finance</text>
+      </g>
+      <g class="orch-node" id="orch-risk">
+        <circle cx="175" cy="138" r="18" />
+        <text class="orch-icon"  x="175" y="143" text-anchor="middle">⚠️</text>
+        <text class="orch-label" x="175" y="174" text-anchor="middle">Risk</text>
+      </g>
+      <g class="orch-node" id="orch-lifestyle">
+        <circle cx="245" cy="138" r="18" />
+        <text class="orch-icon"  x="245" y="143" text-anchor="middle">🌿</text>
+        <text class="orch-label" x="245" y="174" text-anchor="middle">Lifestyle</text>
+      </g>
+      <g class="orch-node" id="orch-decision">
+        <circle cx="140" cy="248" r="20" />
+        <text class="orch-icon"  x="140" y="253" text-anchor="middle">🏆</text>
+        <text class="orch-label" x="140" y="286" text-anchor="middle">Decision</text>
+      </g>
+      <g class="orch-node" id="orch-advice">
+        <circle cx="140" cy="358" r="20" />
+        <text class="orch-icon"      x="140" y="363" text-anchor="middle">🎯</text>
+        <text class="orch-label"     x="140" y="392" text-anchor="middle">Career Advice</text>
+        <text class="orch-label-sub" x="140" y="402" text-anchor="middle">on user pick</text>
+      </g>
+    </svg>
+    <div class="orch-legend">
+      <span><span class="orch-legend-dot idle"></span>Idle</span>
+      <span><span class="orch-legend-dot running"></span>Running</span>
+      <span><span class="orch-legend-dot done"></span>Done</span>
+    </div>
+  </div>
 
   <div class="orbits" id="orbits">
     <div class="orbit o1"><div class="odot odot1"></div></div>
@@ -469,7 +698,7 @@
   <div class="screen" id="s8">
     <div class="sim-wrap">
       <div class="sim-title">Simulating your futures…</div>
-      <div class="sim-sub">5 specialist agents running in parallel. About 20 seconds.</div>
+      <div class="sim-sub">6 specialist agents · 4 running in parallel · ~20 seconds</div>
       <div class="agents">
         <div class="agent" id="ag-coordinator">
           <div class="agent-icon">🧭</div>
@@ -497,6 +726,13 @@
           <div style="flex:1">
             <div class="agent-name">Risk evaluator</div>
             <div class="agent-status" id="st-risk">Waiting…</div>
+          </div>
+        </div>
+        <div class="agent" id="ag-lifestyle">
+          <div class="agent-icon">🌿</div>
+          <div style="flex:1">
+            <div class="agent-name">Lifestyle evaluator</div>
+            <div class="agent-status" id="st-lifestyle">Waiting…</div>
           </div>
         </div>
         <div class="agent" id="ag-decision">
@@ -620,9 +856,9 @@
 
   <!-- ══ Screen 1: Landing ══ -->
   <div class="screen active" id="s1">
-    <div class="s1-badge"><div class="s1-badge-dot"></div>AG2 Multi-Agent · 5 specialists</div>
+    <div class="s1-badge"><div class="s1-badge-dot"></div>AG2 Multi-Agent · 7 specialists</div>
     <div class="s1-title">Your life,<br/>your rules.</div>
-    <div class="s1-sub">Five AI agents simulate the next 5 years of your life across every path you could take.</div>
+    <div class="s1-sub">Seven AI agents simulate the next 5 years of your life — career, comp, risk, lifestyle — and rank every path you could take.</div>
     <div class="li-wrap">
       <div class="li-box">
         <span style="font-size:18px">🔗</span>
@@ -845,13 +1081,75 @@
       c.className = 'agent-chip chip-err'; c.textContent = 'Error';
       el.appendChild(c);
     }
+
+    // Mirror to orchestration topology dash.
+    updateOrch(name, state);
   }
 
+  // ── Orchestration dash (Feature 1) ──
+  const ORCH_NODES = ['coordinator', 'career', 'finance', 'risk', 'lifestyle', 'decision', 'advice'];
+  // The decision→advice edge is "user-gated": idle until the user picks a path on s9.
+  const ORCH_AUTO_EDGES = [
+    'e-coord-career', 'e-coord-finance', 'e-coord-risk', 'e-coord-lifestyle',
+    'e-career-decision', 'e-finance-decision', 'e-risk-decision', 'e-lifestyle-decision',
+  ];
+  const ORCH_ALL_EDGES = [...ORCH_AUTO_EDGES, 'e-decision-advice'];
+  const ORCH_EDGE_BY_EVAL = {
+    career:    { incoming: 'e-coord-career',    outgoing: 'e-career-decision'    },
+    finance:   { incoming: 'e-coord-finance',   outgoing: 'e-finance-decision'   },
+    risk:      { incoming: 'e-coord-risk',      outgoing: 'e-risk-decision'      },
+    lifestyle: { incoming: 'e-coord-lifestyle', outgoing: 'e-lifestyle-decision' },
+  };
+
+  function setOrchNode(name, state) {
+    const el = document.getElementById('orch-' + name);
+    if (!el) return;
+    el.classList.remove('running', 'done', 'error');
+    if (state) el.classList.add(state);
+  }
+  function setOrchEdge(id, state) {
+    const e = document.getElementById(id);
+    if (!e) return;
+    e.classList.remove('active', 'done');
+    if (state) e.classList.add(state);
+  }
+  function resetOrch() {
+    ORCH_NODES.forEach(n => setOrchNode(n, ''));
+    ORCH_ALL_EDGES.forEach(id => setOrchEdge(id, ''));
+  }
+  function updateOrch(name, state) {
+    setOrchNode(name, state);
+    if (state === 'done' && name === 'coordinator') {
+      // Fan-out: data now flowing from coordinator to all 4 evaluators.
+      ['e-coord-career', 'e-coord-finance', 'e-coord-risk', 'e-coord-lifestyle']
+        .forEach(id => setOrchEdge(id, 'active'));
+    } else if (state === 'done' && ORCH_EDGE_BY_EVAL[name]) {
+      // Eval done: its incoming edge is now done, its outgoing edge starts flowing.
+      setOrchEdge(ORCH_EDGE_BY_EVAL[name].incoming, 'done');
+      setOrchEdge(ORCH_EDGE_BY_EVAL[name].outgoing, 'active');
+    } else if (state === 'done' && name === 'decision') {
+      // All upstream auto-edges complete. The decision→advice edge stays
+      // user-gated (idle) until the user picks a path on s9.
+      ORCH_AUTO_EDGES.forEach(id => setOrchEdge(id, 'done'));
+    }
+  }
+
+  // Toggle wiring — hidden by default; click to show/hide.
+  document.getElementById('orch-toggle').addEventListener('click', () => {
+    const t = document.getElementById('orch-toggle');
+    const p = document.getElementById('orch-panel');
+    const on = !t.classList.contains('on');
+    t.classList.toggle('on', on);
+    t.setAttribute('aria-pressed', String(on));
+    p.classList.toggle('hidden', !on);
+  });
+
   function resetAgentUI() {
-    ['coordinator','career','finance','risk','decision'].forEach(name => {
+    ['coordinator','career','finance','risk','lifestyle','decision'].forEach(name => {
       setAgent(name, '', 'Waiting…');
     });
     document.getElementById('sim-error').innerHTML = '';
+    resetOrch();
   }
 
   function showSimError(msg) {
@@ -929,9 +1227,10 @@
           }
           if (data.stage === 'evaluating' && !evalStarted) {
             evalStarted = true;
-            setAgent('career',  'running', 'Modeling trajectory…');
-            setAgent('finance', 'running', 'Modeling comp curves…');
-            setAgent('risk',    'running', 'Analyzing risk…');
+            setAgent('career',    'running', 'Modeling trajectory…');
+            setAgent('finance',   'running', 'Modeling comp curves…');
+            setAgent('risk',      'running', 'Analyzing risk…');
+            setAgent('lifestyle', 'running', 'Modeling WLB & burnout…');
           }
           if (data.stage === 'deciding') {
             setAgent('decision', 'running', 'Ranking by your utility…');
@@ -944,6 +1243,8 @@
           setAgent('finance', 'done', 'Compensation modeling · done');
         } else if (event === 'risk') {
           setAgent('risk', 'done', 'Risk & downside analysis · done');
+        } else if (event === 'lifestyle') {
+          setAgent('lifestyle', 'done', 'WLB, pressure & burnout · done');
         } else if (event === 'decision') {
           setAgent('decision', 'done', 'Ranked by your utility score');
           decisionData = data;
@@ -991,6 +1292,16 @@
     if (p < 0.30) return 'warn';
     return 'bad';
   }
+  function wlbChipClass(s) {
+    if (s >= 0.65) return 'good';
+    if (s >= 0.40) return 'warn';
+    return 'bad';
+  }
+  function burnoutChipClass(p) {
+    if (p < 0.20) return 'good';
+    if (p < 0.40) return 'warn';
+    return 'bad';
+  }
 
   const activeCharts = [];
 
@@ -1021,6 +1332,9 @@
             <span class="chip good">EV ${fmtMoney(p.ev_5y)}</span>
             <span class="chip ${ruinChipClass(p.ruin_prob_5y)}">Ruin ${fmtPct(p.ruin_prob_5y)}</span>
             <span class="chip">Growth ${fmtPct(p.growth_rate)}</span>
+            <span class="chip">${Math.round(p.work_hours_per_week ?? 0)} h/wk</span>
+            <span class="chip ${wlbChipClass(p.wlb_score ?? 0)}">WLB ${fmtPct(p.wlb_score ?? 0)}</span>
+            <span class="chip ${burnoutChipClass(p.burnout_prob_5y ?? 0)}">Burnout ${fmtPct(p.burnout_prob_5y ?? 0)}</span>
           </div>
           <div class="why-block">
             <div class="why-label">Why it fits you</div>
@@ -1030,11 +1344,93 @@
             <div class="why-label">Trade-offs</div>
             <div class="why-text">${escapeHtml(p.tradeoffs)}</div>
           </div>
+          <button class="advice-btn" type="button" data-idx="${i}" onclick="chooseCareerPath(${i})">
+            Choose this path → Get my 12-month plan
+          </button>
         </div>
       </div>
     `).join('');
 
     top3.forEach((p, i) => drawSparkline(i, p.salary_curve_5y, p.stddev_curve_5y));
+  }
+
+  // ── Career advice (post-pick agent) ──
+  async function chooseCareerPath(idx) {
+    if (!decisionData || !Array.isArray(decisionData.top3) || !decisionData.top3[idx]) return;
+    const cards  = document.querySelectorAll('.path-card');
+    const card   = cards[idx];
+    if (!card) return;
+    const chosen = decisionData.top3[idx];
+
+    cards.forEach((c, i) => {
+      c.classList.toggle('chosen', i === idx);
+      c.classList.toggle('dimmed', i !== idx);
+    });
+    cards.forEach(c => c.querySelectorAll('.advice-btn').forEach(b => b.disabled = true));
+    const targetBtn = card.querySelector('.advice-btn');
+    if (targetBtn) targetBtn.textContent = 'Building your plan…';
+
+    const body = card.querySelector('.card-body');
+    const prev = body.querySelector('.advice-block');
+    if (prev) prev.remove();
+    const mount = document.createElement('div');
+    mount.className = 'advice-block';
+    mount.innerHTML = '<div class="advice-headline">Building your 12-month plan…</div>';
+    body.appendChild(mount);
+
+    // Light up the user-gated edge + advice node in the topology dash.
+    setOrchEdge('e-decision-advice', 'active');
+    setOrchNode('advice', 'running');
+
+    try {
+      const res = await fetch('/career-advice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile: {
+            stage:          profile.stage          || 'undergrad',
+            field:          profile.field          || '',
+            location:       profile.location       || '',
+            risk_tolerance: profile.risk_tolerance ?? 0.4,
+            ambition:       profile.ambition       ?? 0.7,
+            notes:          profile.notes          || '',
+          },
+          chosen,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      const advice = await res.json();
+      mount.innerHTML = renderAdviceHtml(advice);
+      if (targetBtn) targetBtn.style.display = 'none';
+      setOrchEdge('e-decision-advice', 'done');
+      setOrchNode('advice', 'done');
+    } catch (err) {
+      mount.innerHTML = `<div class="advice-headline" style="color:var(--red)">Plan failed: ${escapeHtml(err.message || String(err))}</div>`;
+      cards.forEach(c => c.classList.remove('dimmed'));
+      cards.forEach(c => c.querySelectorAll('.advice-btn').forEach(b => b.disabled = false));
+      if (targetBtn) targetBtn.textContent = 'Choose this path → Get my 12-month plan';
+      setOrchEdge('e-decision-advice', '');
+      setOrchNode('advice', 'error');
+    }
+  }
+
+  function renderAdviceHtml(a) {
+    const list = (xs) => (xs || []).map(x => `<li>${escapeHtml(x)}</li>`).join('');
+    return `
+      <div class="advice-headline">${escapeHtml(a.headline || '')}</div>
+      <div class="advice-section">
+        <h4>Courses · books · certifications</h4>
+        <ul>${list(a.courses)}</ul>
+      </div>
+      <div class="advice-section">
+        <h4>Programs to apply to</h4>
+        <ul>${list(a.programs)}</ul>
+      </div>
+      <div class="advice-section">
+        <h4>Personal projects</h4>
+        <ul>${list(a.personal_projects)}</ul>
+      </div>
+    `;
   }
 
   function drawSparkline(idx, mean, stddev) {
@@ -1079,6 +1475,8 @@
     initSlider('amb-slider',  'amb-display',  'ambition');
     document.querySelectorAll('#stage-choices .choice').forEach(c =>
       c.classList.toggle('active', c.dataset.val === 'undergrad'));
+    decisionData = null;
+    resetOrch();
     retreat(1);
   }
 </script>
