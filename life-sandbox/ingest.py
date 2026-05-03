@@ -41,6 +41,9 @@ def _truncate(s: str) -> str:
     return s[:MAX_EXTRACT_CHARS] + "…"
 
 
+truncate = _truncate
+
+
 def _parse_github_login(url: str) -> str | None:
     m = _GITHUB_RE.match(url.strip())
     if not m:

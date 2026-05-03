@@ -54,13 +54,19 @@ from agents import (
     build_coordinator,
     build_decision_agent,
     build_finance_evaluator,
+    build_ingest_agent,
     build_risk_evaluator,
 )
+import ingest
 from schemas import (
     CareerOutput,
     DecisionOutput,
     FinanceOutput,
+    IngestRequest,
+    IngestResponse,
+    IngestSummary,
     PathCandidates,
+    ProfileExtract,
     RiskOutput,
     UserProfile,
 )
@@ -79,6 +85,7 @@ career_eval = build_career_evaluator()
 finance_eval = build_finance_evaluator()
 risk_eval = build_risk_evaluator()
 decision_agent = build_decision_agent()
+ingest_agent = build_ingest_agent()
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +317,95 @@ async def simulate_stream(profile: UserProfile) -> StreamingResponse:
             "Connection": "keep-alive",
         },
     )
+
+
+@app.post("/ingest", response_model=IngestResponse)
+async def ingest_sources(req: IngestRequest) -> IngestResponse:
+    """Fetch each provided source, summarize the bundle, return both the summary
+    (for form pre-fill) and the raw extracts (to resubmit with /simulate)."""
+
+    extracts: list[ProfileExtract] = []
+
+    # Fan out the three URL fetchers in parallel; use None as a placeholder for
+    # missing fields so we can pin the result tuple by position.
+    github_task = ingest.fetch_github(req.github_url) if req.github_url else None
+    linkedin_task = ingest.fetch_linkedin(req.linkedin_url) if req.linkedin_url else None
+    other_task = ingest.fetch_generic(req.other_url) if req.other_url else None
+
+    async def _none() -> None:
+        return None
+
+    github_text, linkedin_text, other_text = await asyncio.gather(
+        github_task if github_task is not None else _none(),
+        linkedin_task if linkedin_task is not None else _none(),
+        other_task if other_task is not None else _none(),
+    )
+
+    if req.github_url:
+        extracts.append(
+            ProfileExtract(
+                source="github",
+                url=req.github_url,
+                text=github_text or "",
+                fetched=github_text is not None,
+            )
+        )
+
+    if req.linkedin_url:
+        extracts.append(
+            ProfileExtract(
+                source="linkedin",
+                url=req.linkedin_url,
+                text=linkedin_text or "",
+                fetched=linkedin_text is not None,
+            )
+        )
+
+    if req.other_url:
+        extracts.append(
+            ProfileExtract(
+                source="site",
+                url=req.other_url,
+                text=other_text or "",
+                fetched=other_text is not None,
+            )
+        )
+
+    if req.pasted_text:
+        extracts.append(
+            ProfileExtract(
+                source="paste",
+                url=None,
+                text=ingest.truncate(req.pasted_text),
+                fetched=True,
+            )
+        )
+
+    if not extracts:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide at least one of: github_url, linkedin_url, other_url, pasted_text.",
+        )
+
+    prompt_parts = ["Source extracts:"]
+    for ex in extracts:
+        header = f"[{ex.source}]"
+        if ex.url:
+            header += f" {ex.url}"
+        if not ex.fetched:
+            header += "  (could not fetch)"
+        prompt_parts.append(header)
+        prompt_parts.append(ex.text or "(empty)")
+        prompt_parts.append("")
+    prompt = "\n".join(prompt_parts)
+
+    try:
+        reply = await ingest_agent.ask(prompt)
+        summary: IngestSummary = await reply.content(retries=2)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"ingest agent failed: {exc}") from exc
+
+    return IngestResponse(summary=summary, extracts=extracts)
 
 
 if __name__ == "__main__":
