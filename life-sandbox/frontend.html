@@ -328,6 +328,39 @@
     }
     .step-textarea:focus { border-color: rgba(99,102,241,0.5); box-shadow: 0 0 0 4px rgba(99,102,241,0.08); }
     .step-textarea::placeholder { color: rgba(255,255,255,0.2); }
+
+    /* ── Screen 8: Simulation ── */
+    .sim-wrap { width: 100%; max-width: 580px; }
+    .sim-title { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 6px; }
+    .sim-sub   { font-size: 14px; color: var(--muted); margin-bottom: 28px; }
+
+    .agents { display: flex; flex-direction: column; gap: 9px; }
+    .agent {
+      display: flex; align-items: center; gap: 14px;
+      padding: 12px 16px; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.02);
+      transition: border-color 0.4s, background 0.4s;
+    }
+    .agent.running { border-color: rgba(99,102,241,0.35);  background: rgba(99,102,241,0.06); }
+    .agent.done    { border-color: rgba(74,222,128,0.3);   background: rgba(74,222,128,0.04); }
+    .agent.error   { border-color: rgba(248,113,113,0.3);  background: rgba(248,113,113,0.04); }
+
+    .agent-icon { font-size: 18px; width: 28px; text-align: center; flex-shrink: 0; }
+    .agent-name { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+    .agent-status { font-size: 11px; color: var(--muted); transition: color 0.3s; }
+    .agent.running .agent-status { color: #818cf8; }
+    .agent.done    .agent-status { color: var(--green); }
+    .agent.error   .agent-status { color: var(--red); }
+
+    .agent-chip {
+      font-size: 10px; font-weight: 700; padding: 3px 8px;
+      border-radius: 999px; margin-left: auto; flex-shrink: 0;
+    }
+    .chip-run  { background: rgba(99,102,241,0.12);  color: #818cf8; animation: chip-blink 1.2s ease infinite; }
+    .chip-done { background: rgba(74,222,128,0.12);  color: var(--green); }
+    .chip-err  { background: rgba(248,113,113,0.12); color: var(--red); }
+    @keyframes chip-blink { 0%,100%{opacity:1} 50%{opacity:.4} }
   </style>
 </head>
 <body>
@@ -368,6 +401,52 @@
   </div>
   <div id="companion" style="left:8%">
     <div class="comp-bubble" id="comp-bubble">Ready to find your path?</div>
+  </div>
+
+  <!-- ══ Screen 8: Simulation ══ -->
+  <div class="screen" id="s8">
+    <div class="sim-wrap">
+      <div class="sim-title">Simulating your futures…</div>
+      <div class="sim-sub">5 specialist agents running in parallel. About 20 seconds.</div>
+      <div class="agents">
+        <div class="agent" id="ag-coordinator">
+          <div class="agent-icon">🧭</div>
+          <div style="flex:1">
+            <div class="agent-name">Coordinator</div>
+            <div class="agent-status" id="st-coordinator">Waiting…</div>
+          </div>
+        </div>
+        <div class="agent" id="ag-career">
+          <div class="agent-icon">📈</div>
+          <div style="flex:1">
+            <div class="agent-name">Career evaluator</div>
+            <div class="agent-status" id="st-career">Waiting…</div>
+          </div>
+        </div>
+        <div class="agent" id="ag-finance">
+          <div class="agent-icon">💰</div>
+          <div style="flex:1">
+            <div class="agent-name">Finance evaluator</div>
+            <div class="agent-status" id="st-finance">Waiting…</div>
+          </div>
+        </div>
+        <div class="agent" id="ag-risk">
+          <div class="agent-icon">⚠️</div>
+          <div style="flex:1">
+            <div class="agent-name">Risk evaluator</div>
+            <div class="agent-status" id="st-risk">Waiting…</div>
+          </div>
+        </div>
+        <div class="agent" id="ag-decision">
+          <div class="agent-icon">🏆</div>
+          <div style="flex:1">
+            <div class="agent-name">Decision agent</div>
+            <div class="agent-status" id="st-decision">Waiting…</div>
+          </div>
+        </div>
+      </div>
+      <div id="sim-error"></div>
+    </div>
   </div>
 
   <!-- ══ Screen 5: Risk tolerance ══ -->
@@ -671,6 +750,51 @@
     advance(8);
     runSSE();
   }
+
+  function setAgent(name, state, statusText) {
+    const el = document.getElementById('ag-' + name);
+    const st = document.getElementById('st-' + name);
+    if (!el || !st) return;
+    el.classList.remove('running', 'done', 'error');
+    if (state) el.classList.add(state);
+    st.textContent = statusText;
+    const existing = el.querySelector('.agent-chip');
+    if (existing) existing.remove();
+    if (state === 'running') {
+      const c = document.createElement('div');
+      c.className = 'agent-chip chip-run'; c.textContent = 'Running';
+      el.appendChild(c);
+    } else if (state === 'done') {
+      const c = document.createElement('div');
+      c.className = 'agent-chip chip-done'; c.textContent = 'Done';
+      el.appendChild(c);
+    } else if (state === 'error') {
+      const c = document.createElement('div');
+      c.className = 'agent-chip chip-err'; c.textContent = 'Error';
+      el.appendChild(c);
+    }
+  }
+
+  function resetAgentUI() {
+    ['coordinator','career','finance','risk','decision'].forEach(name => {
+      setAgent(name, '', 'Waiting…');
+    });
+    document.getElementById('sim-error').innerHTML = '';
+  }
+
+  function showSimError(msg) {
+    const div = document.getElementById('sim-error');
+    div.innerHTML = `<div class="error-banner" style="margin-top:16px">Error: ${escapeHtml(msg)}</div>`;
+  }
+
+  // escapeHtml needed by showSimError — defined here, also used by Task 9
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c =>
+      ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // runSSE placeholder — implemented in Task 8
+  function runSSE() {}
 </script>
 </body>
 </html>
