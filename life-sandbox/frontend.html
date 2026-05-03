@@ -119,6 +119,32 @@
       padding: 12px 16px; border-radius: 10px;
       font-size: 13px; margin-top: 16px; width: 100%;
     }
+
+    /* ── Orbital rings (landing only) ── */
+    .orbits {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      transition: opacity 0.8s ease;
+    }
+    .orbit {
+      position: absolute; border-radius: 50%; border: 1px solid;
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+    }
+    .o1 { width: 320px; height: 320px; border-color: rgba(99,102,241,0.12); animation: orb 18s linear infinite; }
+    .o2 { width: 500px; height: 500px; border-color: rgba(99,102,241,0.07); animation: orb 30s linear infinite reverse; }
+    .o3 { width: 700px; height: 700px; border-color: rgba(139,92,246,0.05); animation: orb 45s linear infinite; }
+    @keyframes orb {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to   { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    .odot {
+      position: absolute; width: 7px; height: 7px; border-radius: 50%;
+      top: -3px; left: 50%; transform: translateX(-50%);
+    }
+    .odot1 { background: var(--indigo); box-shadow: 0 0 14px rgba(99,102,241,0.9); }
+    .odot2 { background: var(--purple); box-shadow: 0 0 10px rgba(139,92,246,0.8); }
+    .odot3 { background: var(--teal);   box-shadow: 0 0 8px  rgba(45,212,191,0.7); }
   </style>
 </head>
 <body>
@@ -126,6 +152,12 @@
   <div class="bg-layer"></div>
   <div class="stars" id="stars"></div>
   <div id="progress-bar"><div id="progress-fill"></div></div>
+
+  <div class="orbits" id="orbits">
+    <div class="orbit o1"><div class="odot odot1"></div></div>
+    <div class="orbit o2"><div class="odot odot2"></div></div>
+    <div class="orbit o3"><div class="odot odot3"></div></div>
+  </div>
 
   <!-- Screens inserted in Tasks 2-8 -->
 
@@ -161,6 +193,7 @@
     // Progress bar: 0% on landing, fills across steps 2–7, full on sim
     const pct = n <= 1 ? 0 : n >= 8 ? 100 : Math.round(((n - 1) / PROFILE_STEPS) * 100);
     document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('orbits').style.opacity = (n === 1) ? '1' : '0';
     updateWalker(n);
     if (n >= 2 && n <= 7) renderDots(n);
   }
