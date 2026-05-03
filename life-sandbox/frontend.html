@@ -793,8 +793,88 @@
       ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  // runSSE placeholder — implemented in Task 8
-  function runSSE() {}
+  // ── SSE pipeline ──
+  let decisionData = null;
+
+  async function runSSE() {
+    resetAgentUI();
+    setAgent('coordinator', 'running', 'Proposing career paths…');
+
+    let res;
+    try {
+      res = await fetch('/simulate/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stage:          profile.stage          || 'undergrad',
+          field:          profile.field          || '',
+          location:       profile.location       || '',
+          risk_tolerance: profile.risk_tolerance ?? 0.4,
+          ambition:       profile.ambition       ?? 0.7,
+          notes:          profile.notes          || '',
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      await consumeSSE(res);
+    } catch (err) {
+      showSimError(err.message || String(err));
+    }
+  }
+
+  async function consumeSSE(res) {
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let evalStarted = false;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let sep;
+      while ((sep = buffer.indexOf('\n\n')) >= 0) {
+        const block   = buffer.slice(0, sep);
+        buffer        = buffer.slice(sep + 2);
+        const event   = (block.match(/^event:\s*(.+)$/m)  || [])[1];
+        const dataStr = (block.match(/^data:\s*(.+)$/m)   || [])[1];
+        if (!event || !dataStr) continue;
+
+        let data;
+        try { data = JSON.parse(dataStr); } catch { continue; }
+
+        if (event === 'stage') {
+          if (data.stage === 'evaluating' && !evalStarted) {
+            evalStarted = true;
+            setAgent('career',  'running', 'Modeling trajectory…');
+            setAgent('finance', 'running', 'Modeling comp curves…');
+            setAgent('risk',    'running', 'Analyzing risk…');
+          }
+          if (data.stage === 'deciding') {
+            setAgent('decision', 'running', 'Ranking by your utility…');
+          }
+        } else if (event === 'candidates') {
+          setAgent('coordinator', 'done', `Generated ${data.paths.length} candidate paths`);
+        } else if (event === 'career') {
+          setAgent('career', 'done', 'Career trajectory analysis · done');
+        } else if (event === 'finance') {
+          setAgent('finance', 'done', 'Compensation modeling · done');
+        } else if (event === 'risk') {
+          setAgent('risk', 'done', 'Risk & downside analysis · done');
+        } else if (event === 'decision') {
+          setAgent('decision', 'done', 'Ranked by your utility score');
+          decisionData = data;
+          renderResults(data);
+          setTimeout(() => advance(9), 700);
+        } else if (event === 'error') {
+          showSimError(data.error);
+          return;
+        } else if (event === 'done') {
+          return;
+        }
+      }
+    }
+  }
 </script>
 </body>
 </html>
