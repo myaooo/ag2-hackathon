@@ -145,6 +145,67 @@
     .odot1 { background: var(--indigo); box-shadow: 0 0 14px rgba(99,102,241,0.9); }
     .odot2 { background: var(--purple); box-shadow: 0 0 10px rgba(139,92,246,0.8); }
     .odot3 { background: var(--teal);   box-shadow: 0 0 8px  rgba(45,212,191,0.7); }
+
+    /* ── Walking path scene ── */
+    #path-scene {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 110px; pointer-events: none; overflow: visible;
+    }
+    #path-road { position: absolute; bottom: 0; left: 0; width: 100%; height: 110px; }
+
+    #walker {
+      position: absolute; bottom: 46px;
+      transition: left 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      font-size: 28px; z-index: 20;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+    }
+    #walker-inner { display: inline-block; animation: walker-idle 2s ease-in-out infinite; }
+    @keyframes walker-walk {
+      0%   { transform: translateY(0)   rotate(-3deg); }
+      50%  { transform: translateY(-3px) rotate(3deg); }
+      100% { transform: translateY(0)   rotate(-3deg); }
+    }
+    @keyframes walker-idle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+    #walker.walking #walker-inner { animation: walker-walk 0.35s steps(2) infinite; }
+
+    .milestone {
+      position: absolute; bottom: 60px; font-size: 18px;
+      transition: opacity 0.4s, transform 0.4s;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+    }
+    .milestone.passed { opacity: 0.2; transform: scale(0.8); }
+
+    .footprint {
+      position: absolute; bottom: 44px;
+      font-size: 11px; opacity: 0;
+      animation: fp-fade 1.5s ease forwards;
+    }
+    @keyframes fp-fade { 0% { opacity: 0.5; } 100% { opacity: 0; } }
+
+    .sparkle {
+      position: absolute; bottom: 62px; font-size: 20px;
+      animation: sparkle-pop 0.6s ease forwards; pointer-events: none;
+    }
+    @keyframes sparkle-pop {
+      0%   { transform: scale(0) translateY(0);   opacity: 1; }
+      100% { transform: scale(1.4) translateY(-28px); opacity: 0; }
+    }
+
+    /* Companion bubble */
+    #companion {
+      position: absolute; bottom: 82px; z-index: 50;
+      pointer-events: none;
+      transition: left 0.8s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+    }
+    .comp-bubble {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 10px 10px 10px 2px;
+      padding: 8px 12px; font-size: 11px; color: var(--muted);
+      max-width: 200px; line-height: 1.5; white-space: nowrap;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      animation: bubble-in 0.4s ease forwards;
+    }
+    @keyframes bubble-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   </style>
 </head>
 <body>
@@ -157,6 +218,34 @@
     <div class="orbit o1"><div class="odot odot1"></div></div>
     <div class="orbit o2"><div class="odot odot2"></div></div>
     <div class="orbit o3"><div class="odot odot3"></div></div>
+  </div>
+
+  <!-- Walking path -->
+  <div id="path-scene">
+    <svg id="path-road" viewBox="0 0 1440 110" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="72" width="1440" height="38" fill="#0d1117"/>
+      <rect x="0" y="76" width="1440" height="28" fill="#131928"/>
+      <line x1="0" y1="76" x2="1440" y2="76" stroke="rgba(99,102,241,0.2)" stroke-width="1"/>
+      <line x1="0" y1="90" x2="1440" y2="90" stroke="rgba(255,255,255,0.06)" stroke-width="1.5" stroke-dasharray="24 16"/>
+      <defs>
+        <linearGradient id="gGround" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+          <stop offset="0" stop-color="#07090f"/>
+          <stop offset="1" stop-color="#0d1117"/>
+        </linearGradient>
+      </defs>
+      <rect x="0" y="68" width="1440" height="8" fill="url(#gGround)"/>
+    </svg>
+    <div class="milestone" id="m2"  style="left:18%">🎓</div>
+    <div class="milestone" id="m3"  style="left:30%">🤔</div>
+    <div class="milestone" id="m4"  style="left:42%">✈️</div>
+    <div class="milestone" id="m5"  style="left:55%">🎲</div>
+    <div class="milestone" id="m6"  style="left:68%">🔥</div>
+    <div class="milestone" id="m7"  style="left:80%">💬</div>
+    <div class="milestone" id="m8"  style="left:90%">🌟</div>
+    <div id="walker" style="left:8%"><div id="walker-inner">🧑‍💻</div></div>
+  </div>
+  <div id="companion" style="left:8%">
+    <div class="comp-bubble" id="comp-bubble">Ready to find your path?</div>
   </div>
 
   <!-- Screens inserted in Tasks 2-8 -->
@@ -213,8 +302,78 @@
     }
   }
 
-  // Placeholder — implemented in Task 3
-  function updateWalker(n) {}
+  const WALKER_POSITIONS = {
+    1: '8%',  2: '18%', 3: '30%', 4: '42%',
+    5: '55%', 6: '68%', 7: '80%', 8: '90%', 9: '94%',
+  };
+  const WALKER_EMOJI = {
+    1:'🧑‍💻', 2:'🧑‍🎓', 3:'🤔', 4:'✈️',
+    5:'🎲',  6:'🔥',  7:'💬', 8:'🔮', 9:'🎉',
+  };
+  const BUBBLE_MSG = {
+    1: 'Ready to find your path?',
+    2: 'Where are you starting from?',
+    3: 'What lights you up?',
+    4: 'Where do you see yourself?',
+    5: 'How do you handle uncertainty?',
+    6: 'How hungry are you for growth?',
+    7: "Anything else? I'm all ears.",
+    8: 'The agents are crunching your data…',
+    9: 'Here are your futures — choose wisely!',
+  };
+  const MILESTONE_IDS = { 2:'m2', 3:'m3', 4:'m4', 5:'m5', 6:'m6', 7:'m7', 8:'m8' };
+
+  function updateWalker(n) {
+    const pct    = WALKER_POSITIONS[n] || '8%';
+    const walker = document.getElementById('walker');
+    const inner  = document.getElementById('walker-inner');
+    const comp   = document.getElementById('companion');
+    const bubble = document.getElementById('comp-bubble');
+    if (!walker || !inner || !comp || !bubble) return;
+
+    spawnFootprint(walker.style.left || '8%');
+
+    walker.classList.add('walking');
+    inner.textContent = WALKER_EMOJI[n] || '🧑‍💻';
+    walker.style.left = pct;
+    comp.style.left   = pct;
+
+    setTimeout(() => walker.classList.remove('walking'), 900);
+    setTimeout(() => spawnSparkle(pct), 800);
+
+    Object.entries(MILESTONE_IDS).forEach(([screen, id]) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.toggle('passed', parseInt(screen) < n);
+    });
+
+    bubble.style.animation = 'none';
+    bubble.offsetHeight;
+    bubble.style.animation = 'bubble-in 0.4s ease forwards';
+    bubble.textContent = BUBBLE_MSG[n] || '';
+  }
+
+  function spawnFootprint(leftPct) {
+    const scene = document.getElementById('path-scene');
+    if (!scene) return;
+    const fp = document.createElement('div');
+    fp.className = 'footprint';
+    fp.style.left = leftPct;
+    fp.textContent = '👣';
+    scene.appendChild(fp);
+    setTimeout(() => fp.remove(), 1600);
+  }
+
+  function spawnSparkle(leftPct) {
+    const scene = document.getElementById('path-scene');
+    if (!scene) return;
+    const sp = document.createElement('div');
+    sp.className = 'sparkle';
+    sp.style.left = leftPct;
+    sp.textContent = '✨';
+    scene.appendChild(sp);
+    setTimeout(() => sp.remove(), 700);
+  }
 </script>
 </body>
 </html>
