@@ -24,6 +24,7 @@ class UserProfile(BaseModel):
     risk_tolerance: Annotated[float, Field(ge=0.0, le=1.0, description="0 = avoid all risk, 1 = embrace volatility")]
     ambition: Annotated[float, Field(ge=0.0, le=1.0, description="0 = stable plateau is fine, 1 = optimize for growth")]
     notes: Annotated[str, Field(default="", description="Free-form notes about goals, constraints, interests")]
+    extracts: Annotated[list["ProfileExtract"], Field(default_factory=list, description="Source extracts attached during ingest, passed through to the agents")]
 
 
 # ---------------------------------------------------------------------------
@@ -104,3 +105,33 @@ class RankedPath(BaseModel):
 
 class DecisionOutput(BaseModel):
     top3: Annotated[list[RankedPath], Field(min_length=3, max_length=3, description="Paths sorted by utility, best first")]
+
+
+# ---------------------------------------------------------------------------
+# Profile ingest — pasted URLs / text → enrich the UserProfile + agent prompts
+# ---------------------------------------------------------------------------
+
+
+class ProfileExtract(BaseModel):
+    source: Annotated[Literal["linkedin", "github", "site", "paste"], Field(description="Origin of this extract")]
+    url: Annotated[str | None, Field(default=None, description="The URL the text was fetched from, if any")]
+    text: Annotated[str, Field(description="Already-truncated extract text (≤ ~4000 chars)")]
+    fetched: Annotated[bool, Field(default=True, description="False when fetch was attempted but blocked (e.g. LinkedIn login wall)")]
+
+
+class IngestRequest(BaseModel):
+    linkedin_url: Annotated[str | None, Field(default=None)]
+    github_url: Annotated[str | None, Field(default=None)]
+    other_url: Annotated[str | None, Field(default=None, description="Personal site / portfolio / blog URL")]
+    pasted_text: Annotated[str | None, Field(default=None, description="Free-form pasted profile text — used when fetches are blocked")]
+
+
+class IngestSummary(BaseModel):
+    field: Annotated[str, Field(description="Inferred field of study or work")]
+    stage: Annotated[Literal["high_school", "undergrad", "new_grad"], Field(description="Inferred career stage")]
+    notes_seed: Annotated[str, Field(description="2-4 sentence summary of goals, projects, interests")]
+
+
+class IngestResponse(BaseModel):
+    summary: IngestSummary
+    extracts: list[ProfileExtract]
