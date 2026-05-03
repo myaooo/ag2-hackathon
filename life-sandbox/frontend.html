@@ -114,7 +114,7 @@
         border-radius: 6px;
         border: 1px solid var(--border);
         background: transparent;
-        color: var(--text);
+        color: var(--text-primary);
         cursor: pointer;
         font: inherit;
       }
@@ -137,6 +137,7 @@
         color: var(--text-secondary); margin-bottom: 6px;
       }
       .field input[type="text"],
+      .field input[type="url"],
       .field select,
       .field textarea {
         width: 100%;
@@ -150,6 +151,7 @@
         transition: border-color 0.15s, box-shadow 0.15s;
       }
       .field input[type="text"]:focus,
+      .field input[type="url"]:focus,
       .field select:focus,
       .field textarea:focus {
         border-color: var(--accent);

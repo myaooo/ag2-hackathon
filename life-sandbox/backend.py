@@ -19,6 +19,7 @@ Pipeline (all agents typed via response_schema):
 Endpoints:
   GET  /healthz             → liveness + provider/model info
   GET  /docs                → FastAPI auto-generated OpenAPI UI (for frontend integration)
+  POST /ingest              → fetch user-supplied URLs (LinkedIn, GitHub, etc.) and summarize via the ingest agent
   POST /simulate            → run pipeline, return final ranked top-3
   POST /simulate/stream     → run pipeline, stream progress events via SSE (text/event-stream)
 
