@@ -867,16 +867,21 @@
 
   // ── SSE pipeline ──
   let decisionData = null;
+  let activeReader = null;
 
   async function runSSE() {
+    if (activeReader) { try { activeReader.cancel(); } catch (_) {} activeReader = null; }
     resetAgentUI();
     setAgent('coordinator', 'running', 'Proposing career paths…');
 
+    const ctrl  = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 60_000);
     let res;
     try {
       res = await fetch('/simulate/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: ctrl.signal,
         body: JSON.stringify({
           stage:          profile.stage          || 'undergrad',
           field:          profile.field          || '',
@@ -889,12 +894,15 @@
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       await consumeSSE(res);
     } catch (err) {
-      showSimError(err.message || String(err));
+      if (err.name !== 'AbortError') showSimError(err.message || String(err));
+    } finally {
+      clearTimeout(timer);
     }
   }
 
   async function consumeSSE(res) {
     const reader  = res.body.getReader();
+    activeReader  = reader;
     const decoder = new TextDecoder();
     let buffer = '';
     let evalStarted = false;
@@ -916,6 +924,9 @@
         try { data = JSON.parse(dataStr); } catch { continue; }
 
         if (event === 'stage') {
+          if (data.stage === 'candidates') {
+            setAgent('coordinator', 'running', 'Proposing career paths…');
+          }
           if (data.stage === 'evaluating' && !evalStarted) {
             evalStarted = true;
             setAgent('career',  'running', 'Modeling trajectory…');
@@ -926,7 +937,7 @@
             setAgent('decision', 'running', 'Ranking by your utility…');
           }
         } else if (event === 'candidates') {
-          setAgent('coordinator', 'done', `Generated ${data.paths.length} candidate paths`);
+          setAgent('coordinator', 'done', `Generated ${(data.paths || []).length} candidate paths`);
         } else if (event === 'career') {
           setAgent('career', 'done', 'Career trajectory analysis · done');
         } else if (event === 'finance') {
@@ -945,7 +956,8 @@
           return;
         }
       }
-    }
+    }  // end while(true)
+    activeReader = null;
   }
 
   // ── Results rendering ──
@@ -1027,7 +1039,7 @@
 
   function drawSparkline(idx, mean, stddev) {
     const ctx = document.getElementById('chart-' + idx);
-    if (!ctx) return;
+    if (!ctx || !Array.isArray(mean) || !mean.length) return;
     const labels = mean.map((_, i) => 'Y' + (i + 1));
     const upper  = mean.map((m, i) => m + (stddev[i] ?? 0));
     const lower  = mean.map((m, i) => Math.max(0, m - (stddev[i] ?? 0)));
