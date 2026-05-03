@@ -1,11 +1,12 @@
 """Agent factories for the life-sandbox pipeline.
 
-Five agents:
+Six agents:
   - coordinator   : profile → 3 candidate path archetypes
   - career_eval   : profile + paths → CareerOutput  (parallel)
   - finance_eval  : profile + paths → FinanceOutput (parallel)
   - risk_eval     : profile + paths → RiskOutput    (parallel)
   - decision      : profile + paths + all evals → top-3 ranked paths
+  - ingest        : raw extracts → IngestSummary (field, stage, notes_seed)
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from schemas import (
     CareerOutput,
     DecisionOutput,
     FinanceOutput,
+    IngestSummary,
     PathCandidates,
     RiskOutput,
 )
@@ -122,6 +124,17 @@ DECISION_PROMPT = (
 )
 
 
+INGEST_PROMPT = (
+    "You are a profile-summarization agent. Given raw extracts from a user's "
+    "online profiles (GitHub, LinkedIn, personal site, or pasted text), produce:\n"
+    "  - field: the user's current field of study or work (e.g. 'Computer Science', 'Finance')\n"
+    "  - stage: one of high_school | undergrad | new_grad — pick the closest fit\n"
+    "  - notes_seed: 2-4 concrete sentences capturing goals, projects, roles, and interests. "
+    "Quote specific projects or company names where the source mentions them. Avoid generic filler.\n"
+    "If extracts are sparse or missing, make conservative best guesses and keep notes_seed short."
+)
+
+
 # ---------------------------------------------------------------------------
 # Factories
 # ---------------------------------------------------------------------------
@@ -169,4 +182,13 @@ def build_decision_agent() -> Agent:
         prompt=DECISION_PROMPT,
         config=build_config(),
         response_schema=DecisionOutput,
+    )
+
+
+def build_ingest_agent() -> Agent:
+    return Agent(
+        name="ingest",
+        prompt=INGEST_PROMPT,
+        config=build_config(),
+        response_schema=IngestSummary,
     )

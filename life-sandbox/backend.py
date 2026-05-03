@@ -87,7 +87,7 @@ decision_agent = build_decision_agent()
 
 
 def _profile_block(profile: UserProfile) -> str:
-    return (
+    block = (
         "User profile:\n"
         f"  stage          : {profile.stage}\n"
         f"  field          : {profile.field}\n"
@@ -96,6 +96,19 @@ def _profile_block(profile: UserProfile) -> str:
         f"  ambition       : {profile.ambition:.2f}  (0=stable, 1=optimize growth)\n"
         f"  notes          : {profile.notes or '(none)'}\n"
     )
+    if profile.extracts:
+        lines = ["", "Source extracts:"]
+        for ex in profile.extracts:
+            header = f"  [{ex.source}]"
+            if ex.url:
+                header += f" {ex.url}"
+            if not ex.fetched:
+                header += "  (could not fetch — pasted)"
+            lines.append(header)
+            for text_line in (ex.text or "").splitlines():
+                lines.append(f"    {text_line}")
+        block += "\n".join(lines) + "\n"
+    return block
 
 
 async def _generate_candidates(profile: UserProfile) -> PathCandidates:
