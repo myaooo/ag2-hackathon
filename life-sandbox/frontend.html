@@ -91,6 +91,47 @@
         margin-bottom: 18px;
       }
       .field { margin-bottom: 18px; }
+
+      .import-panel {
+        grid-column: 1 / -1;       /* span both grid columns */
+        margin-bottom: 24px;
+        padding: 16px;
+        border: 1px dashed var(--border);
+        border-radius: 8px;
+        background: rgba(255,255,255,0.02);
+      }
+      .import-panel h3 {
+        margin: 0 0 12px;
+        font-size: 13px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--text-muted);
+      }
+      .import-panel .field { margin-bottom: 12px; }
+      .import-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+      .import-actions button {
+        padding: 8px 16px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text);
+        cursor: pointer;
+        font: inherit;
+      }
+      .import-actions button:hover:not(:disabled) { background: rgba(255,255,255,0.05); }
+      .import-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+      .pill {
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+      }
+      .pill.ok { color: #6ee7b7; border-color: #6ee7b7; }
+      .pill.warn { color: #fbbf24; border-color: #fbbf24; }
+      .pill.skip { opacity: 0.5; }
+
       .field label {
         display: block; font-size: 13px; font-weight: 600;
         color: var(--text-secondary); margin-bottom: 6px;
@@ -273,6 +314,35 @@
     </header>
 
     <main>
+      <!-- ======================= IMPORT PANEL ======================= -->
+      <section class="panel form-panel import-panel">
+        <h3>Bring your real profile (optional)</h3>
+        <div class="field">
+          <label for="linkedin_url">LinkedIn URL</label>
+          <input type="url" id="linkedin_url" name="linkedin_url"
+            placeholder="https://www.linkedin.com/in/your-handle" />
+        </div>
+        <div class="field">
+          <label for="github_url">GitHub URL</label>
+          <input type="url" id="github_url" name="github_url"
+            placeholder="https://github.com/your-handle" />
+        </div>
+        <div class="field">
+          <label for="other_url">Other URL (personal site, portfolio, blog)</label>
+          <input type="url" id="other_url" name="other_url"
+            placeholder="https://yourdomain.com" />
+        </div>
+        <div class="field">
+          <label for="pasted_text">Or paste profile text</label>
+          <textarea id="pasted_text" name="pasted_text" rows="4"
+            placeholder="Paste your résumé, About section, or anything you'd want a career advisor to see."></textarea>
+        </div>
+        <div class="import-actions">
+          <button type="button" id="import-btn">Import &amp; pre-fill</button>
+          <div class="pills" id="import-pills"></div>
+        </div>
+      </section>
+
       <!-- ======================= FORM ======================= -->
       <section class="panel form-panel">
         <h2>Your profile</h2>
@@ -509,6 +579,76 @@
         }[c]));
       }
 
+      // ---- Import panel: POST /ingest, pre-fill form, stash extracts ----
+      let stashedExtracts = [];
+      let lastSeed = '';
+
+      function renderPills(extracts) {
+        const sources = ['linkedin', 'github', 'site', 'paste'];
+        const found = Object.fromEntries(extracts.map(e => [e.source, e]));
+        const labelByPanel = { linkedin: 'LinkedIn', github: 'GitHub', site: 'Other URL', paste: 'Paste' };
+        const pills = sources.map(src => {
+          const ex = found[src];
+          if (!ex) return `<span class="pill skip">– ${labelByPanel[src]}</span>`;
+          if (ex.fetched) return `<span class="pill ok">✓ ${labelByPanel[src]}</span>`;
+          return `<span class="pill warn">⚠ ${labelByPanel[src]} blocked</span>`;
+        });
+        $('#import-pills').innerHTML = pills.join('');
+      }
+
+      $('#import-btn').addEventListener('click', async () => {
+        const btn = $('#import-btn');
+        const body = {
+          linkedin_url: $('#linkedin_url').value.trim() || null,
+          github_url:   $('#github_url').value.trim()   || null,
+          other_url:    $('#other_url').value.trim()    || null,
+          pasted_text:  $('#pasted_text').value.trim()  || null,
+        };
+        const anyProvided = Object.values(body).some(v => v);
+        if (!anyProvided) {
+          $('#import-pills').innerHTML = '<span class="pill warn">paste at least one source</span>';
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = 'Importing...';
+        try {
+          const res = await fetch('/ingest', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const err = await res.text();
+            $('#import-pills').innerHTML = `<span class="pill warn">${res.status}: ${escapeHtml(err.slice(0, 80))}</span>`;
+            return;
+          }
+          const data = await res.json();
+          // Pre-fill
+          $('#field').value = data.summary.field || $('#field').value;
+          const VALID_STAGES = ['high_school', 'undergrad', 'new_grad'];
+          if (VALID_STAGES.includes(data.summary.stage)) {
+            $('#stage').value = data.summary.stage;
+          }
+          const seed = data.summary.notes_seed || '';
+          // Strip the previously-injected seed (if any) before appending a fresh one,
+          // so re-Import replaces the seed rather than piling new ones on top.
+          const existing = lastSeed
+            ? $('#notes').value.replace(lastSeed, '').trim()
+            : $('#notes').value.trim();
+          $('#notes').value = existing ? `${existing}\n\n${seed}` : seed;
+          lastSeed = seed;
+          // Stash
+          stashedExtracts = data.extracts || [];
+          renderPills(stashedExtracts);
+        } catch (e) {
+          console.error('ingest failed:', e);
+          $('#import-pills').innerHTML = `<span class="pill warn">network error</span>`;
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Import & pre-fill';
+        }
+      });
+
       // ---- Form submit ----
       $('#profile-form').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -520,6 +660,7 @@
           risk_tolerance: parseFloat($('#risk_tolerance').value),
           ambition:       parseFloat($('#ambition').value),
           notes:          $('#notes').value.trim(),
+          extracts:       stashedExtracts,
         };
 
         const btn = $('#submit-btn');
