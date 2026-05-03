@@ -294,6 +294,40 @@
     }
     .step-input:focus { border-color: rgba(99,102,241,0.5); box-shadow: 0 0 0 4px rgba(99,102,241,0.08); }
     .step-input::placeholder { color: rgba(255,255,255,0.2); }
+
+    /* ── Slider steps ── */
+    .slider-section { margin-bottom: 32px; }
+    .slider-big-val {
+      font-size: clamp(48px, 8vw, 68px); font-weight: 900;
+      letter-spacing: -0.04em; color: #818cf8;
+      font-variant-numeric: tabular-nums; margin-bottom: 18px;
+      transition: color 0.2s;
+    }
+    input.range-slider {
+      width: 100%; appearance: none; height: 6px; border-radius: 999px;
+      background: linear-gradient(90deg, var(--indigo) var(--pct, 40%), rgba(255,255,255,0.08) var(--pct, 40%));
+      outline: none; cursor: pointer;
+    }
+    input.range-slider::-webkit-slider-thumb {
+      appearance: none; width: 26px; height: 26px; border-radius: 50%;
+      background: white; cursor: pointer;
+      box-shadow: 0 0 0 4px rgba(99,102,241,0.25), 0 2px 12px rgba(0,0,0,0.5);
+    }
+    .slider-labels {
+      display: flex; justify-content: space-between;
+      font-size: 12px; color: var(--muted); margin-top: 8px;
+    }
+
+    .step-textarea {
+      width: 100%; background: rgba(255,255,255,0.04);
+      color: var(--text); border: 1.5px solid rgba(255,255,255,0.1);
+      border-radius: 12px; padding: 14px 18px;
+      font-family: inherit; font-size: 15px; outline: none; resize: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      margin-bottom: 32px; min-height: 110px; line-height: 1.6;
+    }
+    .step-textarea:focus { border-color: rgba(99,102,241,0.5); box-shadow: 0 0 0 4px rgba(99,102,241,0.08); }
+    .step-textarea::placeholder { color: rgba(255,255,255,0.2); }
   </style>
 </head>
 <body>
@@ -334,6 +368,57 @@
   </div>
   <div id="companion" style="left:8%">
     <div class="comp-bubble" id="comp-bubble">Ready to find your path?</div>
+  </div>
+
+  <!-- ══ Screen 5: Risk tolerance ══ -->
+  <div class="screen" id="s5">
+    <div class="step-shell">
+      <div class="step-q">How much risk can you stomach?</div>
+      <div class="step-hint">Higher = you're OK with volatile, high-upside paths.</div>
+      <div class="slider-section">
+        <div class="slider-big-val" id="risk-display">0.40</div>
+        <input class="range-slider" id="risk-slider" type="range" min="0" max="1" step="0.05" value="0.4"/>
+        <div class="slider-labels"><span>🛡️ Play it safe</span><span>🔥 Bet on yourself</span></div>
+      </div>
+      <div class="step-nav">
+        <button class="btn-back" onclick="retreat(4)">← Back</button>
+        <div class="step-dots" id="dots-s5"></div>
+        <button class="btn-next" onclick="advance(6)">Continue →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Screen 6: Ambition ══ -->
+  <div class="screen" id="s6">
+    <div class="step-shell">
+      <div class="step-q">How hard do you want to push?</div>
+      <div class="step-hint">Higher ambition unlocks more demanding, higher-ceiling paths.</div>
+      <div class="slider-section">
+        <div class="slider-big-val" id="amb-display">0.70</div>
+        <input class="range-slider" id="amb-slider" type="range" min="0" max="1" step="0.05" value="0.7"/>
+        <div class="slider-labels"><span>🌿 Stable plateau</span><span>🚀 Optimize for growth</span></div>
+      </div>
+      <div class="step-nav">
+        <button class="btn-back" onclick="retreat(5)">← Back</button>
+        <div class="step-dots" id="dots-s6"></div>
+        <button class="btn-next" onclick="advance(7)">Continue →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Screen 7: Notes ══ -->
+  <div class="screen" id="s7">
+    <div class="step-shell">
+      <div class="step-q">Anything else to know?</div>
+      <div class="step-hint">Goals, constraints, things you care about. The agents will read this.</div>
+      <textarea class="step-textarea" id="input-notes"
+        placeholder="e.g. I want to stay in NYC. I care more about impact than money. I don't want to do finance…"></textarea>
+      <div class="step-nav">
+        <button class="btn-back" onclick="retreat(6)">← Back</button>
+        <div class="step-dots" id="dots-s7"></div>
+        <button class="btn-next" onclick="startSimulation()">Simulate my life 🚀</button>
+      </div>
+    </div>
   </div>
 
   <!-- ══ Screen 2: Stage ══ -->
@@ -561,6 +646,30 @@
     if (!val) { document.getElementById('input-location').focus(); return; }
     profile.location = val;
     advance(5);
+  }
+
+  function initSlider(sliderId, displayId, profileKey) {
+    const slider  = document.getElementById(sliderId);
+    const display = document.getElementById(displayId);
+    function sync() {
+      const val = parseFloat(slider.value);
+      const pct = (val * 100).toFixed(0) + '%';
+      display.textContent = val.toFixed(2);
+      slider.style.setProperty('--pct', pct);
+      const hue = Math.round(val * 60);
+      display.style.color = `hsl(${220 + hue}, 65%, 68%)`;
+      profile[profileKey] = val;
+    }
+    slider.addEventListener('input', sync);
+    sync();
+  }
+  initSlider('risk-slider', 'risk-display', 'risk_tolerance');
+  initSlider('amb-slider',  'amb-display',  'ambition');
+
+  function startSimulation() {
+    profile.notes = document.getElementById('input-notes').value.trim();
+    advance(8);
+    runSSE();
   }
 </script>
 </body>
