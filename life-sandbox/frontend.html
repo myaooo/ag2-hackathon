@@ -361,6 +361,67 @@
     .chip-done { background: rgba(74,222,128,0.12);  color: var(--green); }
     .chip-err  { background: rgba(248,113,113,0.12); color: var(--red); }
     @keyframes chip-blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── Screen 9: Results ── */
+    .results-wrap { width: 100%; max-width: 640px; overflow-y: auto; max-height: calc(100vh - 170px); }
+    .results-title { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 6px; }
+    .results-sub   { font-size: 14px; color: var(--muted); margin-bottom: 22px; }
+
+    .path-cards { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
+    .path-card {
+      border-radius: 16px; border: 1px solid rgba(255,255,255,0.07);
+      background: rgba(255,255,255,0.02); overflow: hidden;
+      animation: card-in 0.45s ease var(--card-delay, 0.05s) both;
+    }
+    @keyframes card-in { from { opacity:0; transform:translateX(-14px); } to { opacity:1; transform:translateX(0); } }
+    .path-card.rank-1 { border-color: rgba(99,102,241,0.4); background: rgba(99,102,241,0.05); }
+
+    .card-header {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px 20px;
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .card-rank-badge {
+      width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 800;
+      background: rgba(255,255,255,0.06); color: var(--muted);
+    }
+    .path-card.rank-1 .card-rank-badge { background: linear-gradient(135deg, var(--indigo), var(--purple)); color: white; }
+
+    .card-costume { font-size: 32px; flex-shrink: 0; }
+    .card-meta    { flex: 1; }
+    .card-title-r { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+    .card-arch    { font-size: 11px; color: var(--muted); }
+    .card-utility { font-size: 22px; font-weight: 900; color: #818cf8; font-variant-numeric: tabular-nums; }
+    .path-card:not(.rank-1) .card-utility { color: var(--muted); }
+
+    .card-body    { padding: 14px 20px 18px; }
+    .card-summary { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 12px; }
+    .chart-wrap   { height: 80px; margin-bottom: 12px; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .chip {
+      font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+      color: var(--muted);
+    }
+    .chip.good { color: var(--green);  border-color: rgba(74,222,128,0.25); }
+    .chip.warn { color: var(--amber);  border-color: rgba(251,191,36,0.25); }
+    .chip.bad  { color: var(--red);    border-color: rgba(248,113,113,0.25); }
+
+    .why-block { margin-bottom: 8px; }
+    .why-label { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+    .why-text  { font-size: 12px; color: var(--text); line-height: 1.5; }
+
+    .btn-restart {
+      width: 100%; padding: 13px; border-radius: 12px;
+      background: transparent; border: 1px solid rgba(255,255,255,0.1);
+      color: var(--muted); font-family: inherit; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-restart:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
   </style>
 </head>
 <body>
@@ -446,6 +507,16 @@
         </div>
       </div>
       <div id="sim-error"></div>
+    </div>
+  </div>
+
+  <!-- ══ Screen 9: Results ══ -->
+  <div class="screen" id="s9">
+    <div class="results-wrap">
+      <div class="results-title" id="results-title">Your simulated futures</div>
+      <div class="results-sub" id="results-sub">Ranked by utility score</div>
+      <div class="path-cards" id="path-cards"></div>
+      <button class="btn-restart" onclick="restartFlow()">↺ Start over with different choices</button>
     </div>
   </div>
 
@@ -874,6 +945,128 @@
         }
       }
     }
+  }
+
+  // ── Results rendering ──
+  const COSTUMES = {
+    corporate: '🧑‍💻',
+    founder:   '🧑‍🚀',
+    quant:     '🧑‍🔬',
+    consult:   '🧑‍💼',
+    research:  '🧑‍🔬',
+    freelance: '🧑‍🎨',
+    creator:   '🧑‍🎨',
+  };
+
+  function costumeFor(archetype) {
+    const key = (archetype || '').toLowerCase();
+    for (const [k, v] of Object.entries(COSTUMES)) {
+      if (key.includes(k)) return v;
+    }
+    return '🧑‍💻';
+  }
+
+  function fmtMoney(n) {
+    if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000)     return '$' + Math.round(n / 1_000) + 'k';
+    return '$' + Math.round(n);
+  }
+  function fmtPct(p) { return Math.round(p * 100) + '%'; }
+
+  function ruinChipClass(p) {
+    if (p < 0.10) return 'good';
+    if (p < 0.30) return 'warn';
+    return 'bad';
+  }
+
+  const activeCharts = [];
+
+  function renderResults(data) {
+    activeCharts.forEach(c => c.destroy());
+    activeCharts.length = 0;
+
+    const top3 = data.top3 || [];
+    document.getElementById('results-title').textContent = `Your ${top3.length} simulated futures`;
+    document.getElementById('results-sub').textContent =
+      `Ranked by utility · Risk ${(profile.risk_tolerance ?? 0.4).toFixed(2)} · Ambition ${(profile.ambition ?? 0.7).toFixed(2)}`;
+
+    document.getElementById('path-cards').innerHTML = top3.map((p, i) => `
+      <div class="path-card rank-${i + 1}" style="--card-delay:${0.05 + i * 0.13}s">
+        <div class="card-header">
+          <div class="card-rank-badge">${i + 1}</div>
+          <div class="card-costume">${costumeFor(p.archetype)}</div>
+          <div class="card-meta">
+            <div class="card-title-r">${escapeHtml(p.title)}</div>
+            <div class="card-arch">${escapeHtml(p.archetype)}</div>
+          </div>
+          <div class="card-utility">${(p.utility_score ?? 0).toFixed(2)}</div>
+        </div>
+        <div class="card-body">
+          <div class="card-summary">${escapeHtml(p.summary)}</div>
+          <div class="chart-wrap"><canvas id="chart-${i}"></canvas></div>
+          <div class="chips">
+            <span class="chip good">EV ${fmtMoney(p.ev_5y)}</span>
+            <span class="chip ${ruinChipClass(p.ruin_prob_5y)}">Ruin ${fmtPct(p.ruin_prob_5y)}</span>
+            <span class="chip">Growth ${fmtPct(p.growth_rate)}</span>
+          </div>
+          <div class="why-block">
+            <div class="why-label">Why it fits you</div>
+            <div class="why-text">${escapeHtml(p.why)}</div>
+          </div>
+          <div class="why-block">
+            <div class="why-label">Trade-offs</div>
+            <div class="why-text">${escapeHtml(p.tradeoffs)}</div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    top3.forEach((p, i) => drawSparkline(i, p.salary_curve_5y, p.stddev_curve_5y));
+  }
+
+  function drawSparkline(idx, mean, stddev) {
+    const ctx = document.getElementById('chart-' + idx);
+    if (!ctx) return;
+    const labels = mean.map((_, i) => 'Y' + (i + 1));
+    const upper  = mean.map((m, i) => m + (stddev[i] ?? 0));
+    const lower  = mean.map((m, i) => Math.max(0, m - (stddev[i] ?? 0)));
+    const chart  = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { data: upper, borderWidth: 0, pointRadius: 0, fill: '+1', backgroundColor: 'rgba(99,102,241,0.12)' },
+          { data: lower, borderWidth: 0, pointRadius: 0, fill: false },
+          { label: 'Mean', data: mean, borderColor: '#6366f1', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.3 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmtMoney(c.parsed.y) } },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: '#6e7693', font: { size: 10 } } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6e7693', font: { size: 10 }, callback: v => fmtMoney(v) } },
+        },
+      },
+    });
+    activeCharts.push(chart);
+  }
+
+  function restartFlow() {
+    Object.assign(profile, { stage:'undergrad', field:'', location:'', risk_tolerance:0.4, ambition:0.7, notes:'' });
+    document.getElementById('input-field').value    = '';
+    document.getElementById('input-location').value = '';
+    document.getElementById('input-notes').value    = '';
+    document.getElementById('risk-slider').value    = '0.4';
+    document.getElementById('amb-slider').value     = '0.7';
+    initSlider('risk-slider', 'risk-display', 'risk_tolerance');
+    initSlider('amb-slider',  'amb-display',  'ambition');
+    document.querySelectorAll('#stage-choices .choice').forEach(c =>
+      c.classList.toggle('active', c.dataset.val === 'undergrad'));
+    retreat(1);
   }
 </script>
 </body>
